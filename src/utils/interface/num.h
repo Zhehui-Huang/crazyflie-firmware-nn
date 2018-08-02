@@ -37,8 +37,8 @@
 #undef abs
 #define abs(a) ((a) > 0 ? (a) : (-1*(a)))
 
-#undef isnan
-#define isnan(n) ((n != n) ? 1 : 0)
+// #undef isnan
+// #define isnan(n) ((n != n) ? 1 : 0)
 
 
 uint16_t single2half(float number);
