@@ -32,6 +32,7 @@ typedef enum {
   ControllerTypeAny,
   ControllerTypePID,
   ControllerTypeMellinger,
+  ControllerTypeNN,
   ControllerType_COUNT,
 } ControllerType;
 

@@ -132,9 +132,21 @@ int plan_go_to(struct planner *p, bool relative, struct vec hover_pos, float hov
 		hover_yaw += setpoint.yaw;
 	}
 
-	piecewise_plan_7th_order_no_jerk(&p->planned_trajectory, duration,
-		setpoint.pos, setpoint.yaw, setpoint.vel, setpoint.omega.z, setpoint.acc,
-		hover_pos,    hover_yaw,    vzero(),      0,                vzero());
+	// piecewise_plan_7th_order_no_jerk(&p->planned_trajectory, duration,
+	// 	setpoint.pos, setpoint.yaw, setpoint.vel, setpoint.omega.z, setpoint.acc,
+	// 	hover_pos,    hover_yaw,    vzero(),      0,                vzero());
+
+	struct piecewise_traj *pp = &p->planned_trajectory;
+	struct poly4d *piece = &pp->pieces[0];
+	piece->duration = duration;
+	pp->timescale = 1.0;
+	pp->shift = hover_pos;
+	pp->n_pieces = 1;
+	for (int i = 0; i < 4; ++i) {
+		for (int j = 0; j < 8; ++j) {
+			piece->p[i][j] = 0;
+		}
+	}
 
 	p->reversed = false;
 	p->state = TRAJECTORY_STATE_FLYING;

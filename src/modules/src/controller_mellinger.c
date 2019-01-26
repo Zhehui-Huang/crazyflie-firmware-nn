@@ -94,6 +94,8 @@ static float i_error_m_z = 0;
 static struct vec z_axis_desired;
 static float roll_desired; // deg
 static float pitch_desired; // deg
+static struct vec r_error;
+static struct vec v_error;
 
 void controllerMellingerReset(void)
 {
@@ -126,8 +128,8 @@ void controllerMellinger(control_t *control, setpoint_t *setpoint,
                                          const state_t *state,
                                          const uint32_t tick)
 {
-  struct vec r_error;
-  struct vec v_error;
+  // struct vec r_error;
+  // struct vec v_error;
   struct vec target_thrust;
   struct vec z_axis;
   float current_thrust;
@@ -340,3 +342,13 @@ LOG_ADD(LOG_FLOAT, i_err_z, &i_error_z)
 LOG_ADD(LOG_FLOAT, rolld, &roll_desired)
 LOG_ADD(LOG_FLOAT, pitchd, &pitch_desired)
 LOG_GROUP_STOP(ctrlMel)
+
+LOG_GROUP_START(stateError)
+LOG_ADD(LOG_FLOAT, x, &r_error.x)
+LOG_ADD(LOG_FLOAT, y, &r_error.y)
+LOG_ADD(LOG_FLOAT, z, &r_error.z)
+LOG_ADD(LOG_FLOAT, vx, &v_error.x)
+LOG_ADD(LOG_FLOAT, vy, &v_error.y)
+LOG_ADD(LOG_FLOAT, vz, &v_error.z)
+// LOG_ADD(LOG_FLOAT, zdy, &z_axis_desired.y)
+LOG_GROUP_STOP(stateError)

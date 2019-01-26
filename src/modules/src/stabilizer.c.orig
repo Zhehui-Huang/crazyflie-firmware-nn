@@ -60,8 +60,6 @@ static control_t control;
 // statistics
 static float error_dist; // euclidean distance error
 static float error_dist_last; // euclidean distance error over the last 1000 ms
-static int16_t scaled_roll_ctrl;
-static int16_t scaled_pitch_ctrl;
 
 struct vec point2vec(point_t p)
 {
@@ -157,7 +155,6 @@ static void stabilizerTask(void* param)
     }
 
     getExtPosition(&state);
-    control.enableDirectThrust = false;
     stateEstimator(&state, &sensorData, &control, tick);
 
     commanderGetSetpoint(&setpoint, &state);
@@ -165,9 +162,6 @@ static void stabilizerTask(void* param)
     sitAwUpdateSetpoint(&setpoint, &sensorData, &state);
 
     controller(&control, &setpoint, &sensorData, &state, tick);
-
-    scaled_roll_ctrl = control.roll / 1000;
-    scaled_pitch_ctrl = control.pitch / 1000;
 
     checkEmergencyStopTimeout();
 
@@ -182,6 +176,7 @@ static void stabilizerTask(void* param)
       powerDistribution(&control);
     }
 
+<<<<<<< HEAD
     // stats
     if (!crtpCommanderHighLevelIsStopped()) {
       float const dt = 1.0f / RATE_MAIN_LOOP;
@@ -192,12 +187,12 @@ static void stabilizerTask(void* param)
         error_dist_last = error_dist;
         error_dist = 0;
       }
-    }
-
+=======
     if (   usddeckLoggingEnabled()
         && usddeckLoggingMode() == usddeckLoggingMode_SynchronousStabilizer
         && RATE_DO_EXECUTE(usddeckFrequency(), tick)) {
       usddeckTriggerLogging();
+>>>>>>> uSDLogSynchronous
     }
 
     tick++;
@@ -274,11 +269,11 @@ LOG_GROUP_STOP(accSec)
 // LOG_ADD(LOG_FLOAT, pressure, &sensorData.baro.pressure)
 // LOG_GROUP_STOP(baro)
 
-LOG_GROUP_START(gyro)
-LOG_ADD(LOG_FLOAT, x, &sensorData.gyro.x)
-LOG_ADD(LOG_FLOAT, y, &sensorData.gyro.y)
-LOG_ADD(LOG_FLOAT, z, &sensorData.gyro.z)
-LOG_GROUP_STOP(gyro)
+// LOG_GROUP_START(gyro)
+// LOG_ADD(LOG_FLOAT, x, &sensorData.gyro.x)
+// LOG_ADD(LOG_FLOAT, y, &sensorData.gyro.y)
+// LOG_ADD(LOG_FLOAT, z, &sensorData.gyro.z)
+// LOG_GROUP_STOP(gyro)
 
 #ifdef LOG_SEC_IMU
 LOG_GROUP_START(gyroSec)
@@ -294,23 +289,20 @@ LOG_GROUP_STOP(gyroSec)
 // LOG_ADD(LOG_FLOAT, z, &sensorData.mag.z)
 // LOG_GROUP_STOP(mag)
 
-LOG_GROUP_START(control)
-LOG_ADD(LOG_INT16, roll, &scaled_roll_ctrl)
-LOG_ADD(LOG_INT16, pitch, &scaled_pitch_ctrl)
-LOG_ADD(LOG_INT16, yaw, &control.yaw)
-LOG_ADD(LOG_FLOAT, thrust, &control.thrust)
-LOG_ADD(LOG_INT8, type, &controllerType)
-LOG_GROUP_STOP(control)
+// LOG_GROUP_START(controller)
+// LOG_ADD(LOG_INT16, ctr_yaw, &control.yaw)
+// LOG_GROUP_STOP(controller)
 
 LOG_GROUP_START(stateEstimate)
-// LOG_ADD(LOG_FLOAT, x, &state.position.x)
-// LOG_ADD(LOG_FLOAT, y, &state.position.y)
-// LOG_ADD(LOG_FLOAT, z, &state.position.z)
+LOG_ADD(LOG_FLOAT, x, &state.position.x)
+LOG_ADD(LOG_FLOAT, y, &state.position.y)
+LOG_ADD(LOG_FLOAT, z, &state.position.z)
 
-// LOG_ADD(LOG_FLOAT, vx, &state.velocity.x)
-// LOG_ADD(LOG_FLOAT, vy, &state.velocity.y)
-// LOG_ADD(LOG_FLOAT, vz, &state.velocity.z)
+LOG_ADD(LOG_FLOAT, vx, &state.velocity.x)
+LOG_ADD(LOG_FLOAT, vy, &state.velocity.y)
+LOG_ADD(LOG_FLOAT, vz, &state.velocity.z)
 
+<<<<<<< HEAD
 LOG_ADD(LOG_FLOAT, ax, &state.acc.x)
 LOG_ADD(LOG_FLOAT, ay, &state.acc.y)
 LOG_ADD(LOG_FLOAT, az, &state.acc.z)
@@ -318,15 +310,22 @@ LOG_ADD(LOG_FLOAT, az, &state.acc.z)
 LOG_ADD(LOG_FLOAT, roll, &state.attitude.roll)
 LOG_ADD(LOG_FLOAT, pitch, &state.attitude.pitch)
 LOG_ADD(LOG_FLOAT, yaw, &state.attitude.yaw)
-
-LOG_ADD(LOG_FLOAT, qx, &state.attitudeQuaternion.x)
-LOG_ADD(LOG_FLOAT, qy, &state.attitudeQuaternion.y)
-LOG_ADD(LOG_FLOAT, qz, &state.attitudeQuaternion.z)
-LOG_ADD(LOG_FLOAT, qw, &state.attitudeQuaternion.w)
-
 LOG_GROUP_STOP(stateEstimate)
 
 LOG_GROUP_START(ctrlStat)
 LOG_ADD(LOG_FLOAT, edist, &error_dist_last)
 LOG_GROUP_STOP(ctrlStat)
+=======
+LOG_ADD(LOG_FLOAT, qx, &state.attitudeQuaternion.x)
+LOG_ADD(LOG_FLOAT, qy, &state.attitudeQuaternion.y)
+LOG_ADD(LOG_FLOAT, qz, &state.attitudeQuaternion.z)
+LOG_ADD(LOG_FLOAT, qw, &state.attitudeQuaternion.w)
+LOG_GROUP_STOP(stateEstimate)
 
+LOG_GROUP_START(control)
+LOG_ADD(LOG_INT16, roll, &control.roll)
+LOG_ADD(LOG_INT16, pitch, &control.pitch)
+LOG_ADD(LOG_INT16, yaw, &control.yaw)
+LOG_ADD(LOG_FLOAT, thrust, &control.thrust)
+LOG_GROUP_STOP(control)
+>>>>>>> uSDLogSynchronous
