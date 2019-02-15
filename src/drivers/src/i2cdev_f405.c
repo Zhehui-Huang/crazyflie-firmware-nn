@@ -80,6 +80,16 @@ bool i2cdevReadBits(I2C_Dev *dev, uint8_t devAddress, uint8_t memAddress,
   return status;
 }
 
+bool i2cdevReadNew(I2C_Dev *dev, uint8_t devAddress, uint16_t len, uint8_t *data)
+{
+  I2cMessage message;
+
+  i2cdrvCreateMessage(&message, devAddress, i2cRead, len, data);
+
+  return i2cdrvMessageTransfer(dev, &message);
+}
+
+
 bool i2cdevRead(I2C_Dev *dev, uint8_t devAddress, uint8_t memAddress,
                uint16_t len, uint8_t *data)
 {
@@ -135,6 +145,16 @@ bool i2cdevWriteBits(I2C_Dev *dev, uint8_t devAddress, uint8_t memAddress,
 
   return status;
 }
+
+bool i2cdevWriteNew(I2C_Dev *dev, uint8_t devAddress, uint16_t len, uint8_t *data)
+{
+  I2cMessage message;
+
+  i2cdrvCreateMessage(&message, devAddress, i2cWrite, len, data);
+
+  return i2cdrvMessageTransfer(dev, &message);
+}
+
 
 bool i2cdevWrite(I2C_Dev *dev, uint8_t devAddress, uint8_t memAddress,
                 uint16_t len, uint8_t *data)

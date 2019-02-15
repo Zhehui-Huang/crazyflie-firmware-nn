@@ -44,6 +44,17 @@ typedef I2cDrv    I2C_Dev;
 
 /**
  * Read bytes from an I2C peripheral
+ * @param dev  Pointer to I2C peripheral to read from
+ * @param devAddress  The device address to read from
+ * @param len  Number of bytes to read.
+ * @param data  Pointer to a buffer to read the data to.
+ *
+ * @return TRUE if read was successful, otherwise FALSE.
+ */
+bool i2cdevReadNew(I2C_Dev *dev, uint8_t devAddress, uint16_t len, uint8_t *data);
+
+/**
+ * Read bytes from an I2C peripheral
  * @param I2Cx  Pointer to I2C peripheral to read from
  * @param devAddress  The device address to read from
  * @param memAddress  The internal address to read from, I2CDEV_NO_MEM_ADDR if none.
@@ -113,6 +124,18 @@ bool i2cdevReadBit(I2C_Dev *dev, uint8_t devAddress, uint8_t memAddress,
  */
 bool i2cdevReadBits(I2C_Dev *dev, uint8_t devAddress, uint8_t memAddress,
                     uint8_t bitStart, uint8_t length, uint8_t *data);
+
+/**
+ * Write bytes to an I2C peripheral
+ * @param dev  Pointer to I2C peripheral to write to
+ * @param devAddress  The device address to write to
+ * @param len  Number of bytes to read.
+ * @param data  Pointer to a buffer to read the data from that will be written.
+ *
+ * @return TRUE if write was successful, otherwise FALSE.
+ */
+bool i2cdevWriteNew(I2C_Dev *dev, uint8_t devAddress, uint16_t len, uint8_t *data);
+
 
 /**
  * Write bytes to an I2C peripheral
