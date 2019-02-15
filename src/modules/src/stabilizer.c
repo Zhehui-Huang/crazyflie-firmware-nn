@@ -176,8 +176,8 @@ static void stabilizerTask(void* param)
 
     if (emergencyStop || upsideDown) {
       powerStop();
-      controllerInit(getControllerType());
-      crtpCommanderHighLevelStop();
+      // controllerInit(getControllerType());
+      // crtpCommanderHighLevelStop();
     } else {
       powerDistribution(&control);
     }
@@ -303,17 +303,17 @@ LOG_ADD(LOG_INT8, type, &controllerType)
 LOG_GROUP_STOP(control)
 
 LOG_GROUP_START(stateEstimate)
-// LOG_ADD(LOG_FLOAT, x, &state.position.x)
-// LOG_ADD(LOG_FLOAT, y, &state.position.y)
-// LOG_ADD(LOG_FLOAT, z, &state.position.z)
+LOG_ADD(LOG_FLOAT, x, &state.position.x)
+LOG_ADD(LOG_FLOAT, y, &state.position.y)
+LOG_ADD(LOG_FLOAT, z, &state.position.z)
 
-// LOG_ADD(LOG_FLOAT, vx, &state.velocity.x)
-// LOG_ADD(LOG_FLOAT, vy, &state.velocity.y)
-// LOG_ADD(LOG_FLOAT, vz, &state.velocity.z)
+LOG_ADD(LOG_FLOAT, vx, &state.velocity.x)
+LOG_ADD(LOG_FLOAT, vy, &state.velocity.y)
+LOG_ADD(LOG_FLOAT, vz, &state.velocity.z)
 
-LOG_ADD(LOG_FLOAT, ax, &state.acc.x)
-LOG_ADD(LOG_FLOAT, ay, &state.acc.y)
-LOG_ADD(LOG_FLOAT, az, &state.acc.z)
+// LOG_ADD(LOG_FLOAT, ax, &state.acc.x)
+// LOG_ADD(LOG_FLOAT, ay, &state.acc.y)
+// LOG_ADD(LOG_FLOAT, az, &state.acc.z)
 
 LOG_ADD(LOG_FLOAT, roll, &state.attitude.roll)
 LOG_ADD(LOG_FLOAT, pitch, &state.attitude.pitch)
