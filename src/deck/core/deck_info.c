@@ -176,7 +176,9 @@ static bool infoDecode(DeckInfo * info)
 static void enumerateDecks(void)
 {
   uint8_t nDecks = 0;
-  bool noError = true;
+  int i;
+  // bool noError = true;
+  uint8_t deckIdx = 0;
 
   owInit();
 
@@ -189,25 +191,25 @@ static void enumerateDecks(void)
     nDecks = 0;
   }
 
-#ifndef IGNORE_OW_DECKS
-  for (int i = 0; i < nDecks; i++)
+  for (i = 0; i < nDecks; i++)
   {
     DECK_INFO_DBG_PRINT("Enumerating deck %i\n", i);
-    if (owRead(i, 0, sizeof(deckInfos[0].raw), (uint8_t *)&deckInfos[i]))
+    if (owRead(i, 0, sizeof(deckInfos[0].raw), (uint8_t *)&deckInfos[deckIdx]))
     {
-      if (infoDecode(&deckInfos[i]))
+      if (infoDecode(&deckInfos[deckIdx]))
       {
-        deckInfos[i].driver = findDriver(&deckInfos[i]);
-        printDeckInfo(&deckInfos[i]);
+        deckInfos[deckIdx].driver = findDriver(&deckInfos[deckIdx]);
+        printDeckInfo(&deckInfos[deckIdx]);
+        deckIdx++;
       } else {
 #ifdef DEBUG
         DEBUG_PRINT("Deck %i has corrupt OW memory. "
                     "Ignoring the deck in DEBUG mode.\n", i);
-        deckInfos[i].driver = &dummyDriver;
+        // deckInfos[].driver = &dummyDriver;
 #else
         DEBUG_PRINT("Deck %i has corrupt OW memory. "
                     "No driver will be initialized!\n", i);
-        noError = false;
+        // noError = false;
 #endif
       }
     }
@@ -215,13 +217,9 @@ static void enumerateDecks(void)
     {
       DEBUG_PRINT("Reading deck nr:%d [FAILED]. "
                   "No driver will be initialized!\n", i);
-      noError = false;
+      // noError = false;
     }
   }
-#else
-  DEBUG_PRINT("Ignoring all OW decks because of compile flag.\n");
-  nDecks = 0;
-#endif
 
   // Add build-forced driver
   if (strlen(deck_force) > 0) {
@@ -229,10 +227,10 @@ static void enumerateDecks(void)
     if (!driver) {
       DEBUG_PRINT("WARNING: compile-time forced driver %s not found\n", deck_force);
     } else if (driver->init) {
-      if (nDecks <= DECK_MAX_COUNT)
+      if (deckIdx <= DECK_MAX_COUNT)
       {
-        nDecks++;
-        deckInfos[nDecks - 1].driver = driver;
+        deckIdx++;
+        deckInfos[deckIdx - 1].driver = driver;
         DEBUG_PRINT("compile-time forced driver %s added\n", deck_force);
       } else {
         DEBUG_PRINT("WARNING: No room for compile-time forced driver\n");
@@ -240,9 +238,9 @@ static void enumerateDecks(void)
     }
   }
 
-  if (noError) {
-    count = nDecks;
-  }
+  // if (noError) {
+    count = deckIdx;
+  // }
 
   return;
 }
