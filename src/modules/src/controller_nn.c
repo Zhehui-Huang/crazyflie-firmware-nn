@@ -14,6 +14,8 @@
 
 static bool enableBigQuad = false;
 
+static const float maxThrustFactor = 0.70f;
+
 void controllerNNInit(void) {}
 
 
@@ -74,12 +76,12 @@ void controllerNN(control_t *control,
 	// the state vector
 	// TODO: clip error?
 	// TODO: clip velocity?
-	state_array[0] = 0;//state->position.x - setpoint->position.x;
-	state_array[1] = 0;//state->position.y - setpoint->position.y;
-	state_array[2] = 0;//state->position.z - setpoint->position.z;
-	state_array[3] = 0;//state->velocity.x;
-	state_array[4] = 0;//state->velocity.y;
-	state_array[5] = 0;//state->velocity.z;
+	state_array[0] = state->position.x - setpoint->position.x;
+	state_array[1] = state->position.y - setpoint->position.y;
+	state_array[2] = state->position.z - setpoint->position.z;
+	state_array[3] = state->velocity.x;
+	state_array[4] = state->velocity.y;
+	state_array[5] = state->velocity.z;
 	state_array[6] = rot.m[0][0];
 	state_array[7] = rot.m[0][1];
 	state_array[8] = rot.m[0][2];
@@ -103,17 +105,17 @@ void controllerNN(control_t *control,
 	int PWM_0, PWM_1, PWM_2, PWM_3; 
 	thrusts2PWM(&control_n, &PWM_0, &PWM_1, &PWM_2, &PWM_3);
 
-	// if (setpoint->mode.z == modeDisable) {
-	// 	control->motorRatios[0] = 0;
-	// 	control->motorRatios[1] = 0;
-	// 	control->motorRatios[2] = 0;
-	// 	control->motorRatios[3] = 0;
-	// } else {
+	if (setpoint->mode.z == modeDisable) {
+		control->motorRatios[0] = 0;
+		control->motorRatios[1] = 0;
+		control->motorRatios[2] = 0;
+		control->motorRatios[3] = 0;
+	} else {
 		control->motorRatios[0] = PWM_0;
 		control->motorRatios[1] = PWM_1;
 		control->motorRatios[2] = PWM_2;
 		control->motorRatios[3] = PWM_3;
-	// }
+	}
 }
 
 
@@ -142,13 +144,13 @@ void thrusts2PWM(control_t_n *control_n,
 		// Big quad => output angular velocity of rotors
 
 		// motor 0
-		*PWM_0 = 1.0f * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_0), 0.0, 1.0));
+		*PWM_0 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_0), 0.0, 1.0));
 		// motor 1
-		*PWM_1 = 1.0f * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_1), 0.0, 1.0));
+		*PWM_1 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_1), 0.0, 1.0));
 		// motor
-		*PWM_2 = 1.0f * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_2), 0.0, 1.0));
+		*PWM_2 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_2), 0.0, 1.0));
 		// motor 3 
-		*PWM_3 = 1.0f * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_3), 0.0, 1.0));
+		*PWM_3 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_3), 0.0, 1.0));
 	} else {
 		// Regular Crazyflie => output thrust directly
 		// motor 0
