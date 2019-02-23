@@ -50,12 +50,6 @@
 #include "sound.h"
 #include "filter.h"
 
-/**
- * Enable 250Hz digital LPF mode. However does not work with
- * multiple slave reading through MPU9250 (MAG and BARO), only single for some reason.
- */
-#define SENSORS_MPU6500_DLPF_256HZ
-
 #define SENSORS_ENABLE_PRESSURE_LPS25H
 
 #define SENSORS_ENABLE_MAG_AK8963
@@ -131,6 +125,12 @@ static bool isMagnetometerPresent = false;
 static bool isMpu6500TestPassed = false;
 static bool isAK8963TestPassed = false;
 static bool isLPS25HTestPassed = false;
+
+/**
+ * Enable 250Hz digital LPF mode. However does not work with
+ * multiple slave reading through MPU9250 (MAG and BARO), only single for some reason.
+ */
+static bool use_dlpf_256hz = false;
 
 // Pre-calculated values for accelerometer alignment
 float cosPitch;
@@ -344,28 +344,32 @@ static void sensorsDeviceInit(void)
   // Set accelerometer digital low-pass bandwidth
   mpu6500SetAccelDLPF(MPU6500_ACCEL_DLPF_BW_41);
 
-#ifdef SENSORS_MPU6500_DLPF_256HZ
-  // 256Hz digital low-pass filter only works with little vibrations
-  // Set output rate (15): 8000 / (1 + 7) = 1000Hz
-  mpu6500SetRate(7);
-  // Set digital low-pass bandwidth
-  mpu6500SetDLPFMode(MPU6500_DLPF_BW_256);
-#else
-  // To low DLPF bandwidth might cause instability and decrease agility
-  // but it works well for handling vibrations and unbalanced propellers
-  // Set output rate (1): 1000 / (1 + 0) = 1000Hz
-  mpu6500SetRate(0);
-  // Set digital low-pass bandwidth for gyro
+  // Gyro modes (see page 13 in RM-MPU-9250A-00-v1.6.pdf):
+  // // 1. [default CF firmware] 92 Hz Bandwidth, 3.9ms delay, Fs = 1000 Hz
+  // mpu6500SetRate(0); // 1000 / (1 + 0) = 1000Hz
   // mpu6500SetDLPFMode(MPU6500_DLPF_BW_98);
-  mpu6500SetDLPFMode(MPU6500_DLPF_BW_188);
+  // // 2. 184 Hz Bandwidth, 2.9ms delay, Fs = 1000 Hz
+  // mpu6500SetRate(0); // 1000 / (1 + 0) = 1000Hz
+  // mpu6500SetDLPFMode(MPU6500_DLPF_BW_188);
+  // 3. 250 Hz bandwidth, 0.97ms delay, Fs = 8000 Hz
+  mpu6500SetRate(7); // 8000 / (1 + 7) = 1000Hz
+  mpu6500SetDLPFMode(MPU6500_DLPF_BW_256);
+  use_dlpf_256hz = true;
+
+  // // 4. 3600 Hz bandwidth, 0.11ms delay, Fs = 32000 Hz
+  // mpu6500SetRate(31); // 32000 / (1 + 31) = 1000Hz
+  // mpu9250SetFchoiceInverted(2); // Fchoice = b01 => inverted = b10
+
+  // // 5. 8800 Hz bandwidth, 0.064ms delay, Fs = 32000 Hz
+  // mpu6500SetRate(31); // 32000 / (1 + 31) = 1000Hz
+  // mpu9250SetFchoiceInverted(1); // Fchoice = bx0 => inverted = bx1
 
   // Init second order filer for accelerometer
   for (uint8_t i = 0; i < 3; i++)
   {
-    lpf2pInit(&gyroLpf[i], 1000, GYRO_LPF_CUTOFF_FREQ);
+    // lpf2pInit(&gyroLpf[i], 1000, GYRO_LPF_CUTOFF_FREQ);
     lpf2pInit(&accLpf[i],  1000, ACCEL_LPF_CUTOFF_FREQ);
   }
-#endif
 
 
 #ifdef SENSORS_ENABLE_MAG_AK8963
@@ -407,13 +411,13 @@ static void sensorsDeviceInit(void)
 static void sensorsSetupSlaveRead(void)
 {
   // Now begin to set up the slaves
-#ifdef SENSORS_MPU6500_DLPF_256HZ
-  // As noted in registersheet 4.4: "Data should be sampled at or above sample rate;
-  // SMPLRT_DIV is only used for 1kHz internal sampling." Slowest update rate is then 500Hz.
-  mpu6500SetSlave4MasterDelay(15); // read slaves at 500Hz = (8000Hz / (1 + 15))
-#else
-  mpu6500SetSlave4MasterDelay(9); // read slaves at 100Hz = (500Hz / (1 + 4))
-#endif
+  if (use_dlpf_256hz) {
+    // As noted in registersheet 4.4: "Data should be sampled at or above sample rate;
+    // SMPLRT_DIV is only used for 1kHz internal sampling." Slowest update rate is then 500Hz.
+    mpu6500SetSlave4MasterDelay(15); // read slaves at 500Hz = (8000Hz / (1 + 15))
+  } else {
+    mpu6500SetSlave4MasterDelay(9); // read slaves at 100Hz = (500Hz / (1 + 4))
+  }
 
   mpu6500SetI2CBypassEnabled(false);
   mpu6500SetWaitForExternalSensorEnabled(true); // the slave data isn't so important for the state estimation
