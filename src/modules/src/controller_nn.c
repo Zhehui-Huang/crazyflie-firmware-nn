@@ -4,6 +4,7 @@
 #include <math.h>
 #include "controller_nn.h"
 #include "log.h"
+#include "usec_time.h"
 
 
 #define MAX_THRUST 0.15f
@@ -16,7 +17,19 @@ static bool enableBigQuad = false;
 
 static const float maxThrustFactor = 0.70f;
 
-void controllerNNInit(void) {}
+static control_t_n control_n;
+static struct mat33 rot;
+static float state_array[18];
+// static float state_array[22];
+
+static uint32_t usec_eval;
+
+void controllerNNInit(void) {
+	control_n.thrust_0 = 0.0f;
+	control_n.thrust_1 = 0.0f;
+	control_n.thrust_2 = 0.0f;
+	control_n.thrust_3 = 0.0f;
+}
 
 
 
@@ -46,10 +59,6 @@ float clip(float v, float min, float max) {
 }
 
 
-static control_t_n control_n;
-static struct mat33 rot;
-static float state_array[18];
-
 void controllerNN(control_t *control, 
 				  setpoint_t *setpoint, 
 				  const sensorData_t *sensors, 
@@ -57,7 +66,7 @@ void controllerNN(control_t *control,
 				  const uint32_t tick)
 {
 	control->enableDirectThrust = true;
-	if (!RATE_DO_EXECUTE(/*RATE_100_HZ*/250, tick)) {
+	if (!RATE_DO_EXECUTE(/*RATE_100_HZ*/500, tick)) {
 		return;
 	}
 
@@ -79,9 +88,9 @@ void controllerNN(control_t *control,
 	state_array[0] = state->position.x - setpoint->position.x;
 	state_array[1] = state->position.y - setpoint->position.y;
 	state_array[2] = state->position.z - setpoint->position.z;
-	state_array[3] = state->velocity.x;
-	state_array[4] = state->velocity.y;
-	state_array[5] = state->velocity.z;
+	state_array[3] = state->velocity.x - setpoint->velocity.x;
+	state_array[4] = state->velocity.y - setpoint->velocity.y;
+	state_array[5] = state->velocity.z - setpoint->velocity.z;
 	state_array[6] = rot.m[0][0];
 	state_array[7] = rot.m[0][1];
 	state_array[8] = rot.m[0][2];
@@ -91,14 +100,19 @@ void controllerNN(control_t *control,
 	state_array[12] = rot.m[2][0];
 	state_array[13] = rot.m[2][1];
 	state_array[14] = rot.m[2][2];
-	state_array[15] = omega_roll;
-	state_array[16] = omega_pitch;
-	state_array[17] = omega_yaw;
-	// state_array[18] = 2;//state->position.z + 1.25f;
+	state_array[15] = omega_roll - radians(setpoint->attitudeRate.roll);
+	state_array[16] = omega_pitch - radians(setpoint->attitudeRate.pitch);
+	state_array[17] = omega_yaw - radians(setpoint->attitudeRate.yaw);
+	// state_array[18] = control_n.thrust_0;
+	// state_array[19] = control_n.thrust_1;
+	// state_array[20] = control_n.thrust_2;
+	// state_array[21] = control_n.thrust_3;
 
 
 	// run the neural neural network
+	uint64_t start = usecTimestamp();
 	networkEvaluate(&control_n, state_array);
+	usec_eval = (uint32_t) (usecTimestamp() - start);
 
 	// convert thrusts to directly to PWM
 	// need to hack the firmware (stablizer.c and power_distribution_stock.c)
@@ -171,4 +185,19 @@ LOG_ADD(LOG_FLOAT, out0, &control_n.thrust_0)
 LOG_ADD(LOG_FLOAT, out1, &control_n.thrust_1)
 LOG_ADD(LOG_FLOAT, out2, &control_n.thrust_2)
 LOG_ADD(LOG_FLOAT, out3, &control_n.thrust_3)
+
+LOG_ADD(LOG_FLOAT, in0, &state_array[0])
+LOG_ADD(LOG_FLOAT, in1, &state_array[1])
+LOG_ADD(LOG_FLOAT, in2, &state_array[2])
+
+LOG_ADD(LOG_FLOAT, in3, &state_array[3])
+LOG_ADD(LOG_FLOAT, in4, &state_array[4])
+LOG_ADD(LOG_FLOAT, in5, &state_array[5])
+
+LOG_ADD(LOG_FLOAT, in15, &state_array[15])
+LOG_ADD(LOG_FLOAT, in16, &state_array[16])
+LOG_ADD(LOG_FLOAT, in17, &state_array[17])
+
+LOG_ADD(LOG_UINT32, usec_eval, &usec_eval)
+
 LOG_GROUP_STOP(ctrlNN)

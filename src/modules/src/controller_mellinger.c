@@ -75,6 +75,9 @@ static float i_range_m_z  = 1500;
 // roll and pitch angular velocity
 static float kd_omega_rp = 200; // D
 
+static float e_bound_pos = 0.5;
+static float e_bound_vel = 0.5;
+
 
 // Helper variables
 static float i_error_x = 0;
@@ -140,11 +143,11 @@ void controllerMellinger(control_t *control, setpoint_t *setpoint,
   float dt;
   float desiredYaw = 0; //deg
 
-  if (!RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
+  if (!RATE_DO_EXECUTE(RATE_500_HZ, tick)) {
     return;
   }
 
-  dt = (float)(1.0f/ATTITUDE_RATE);
+  dt = (float)(1.0f/RATE_500_HZ);
   struct vec setpointPos = mkvec(setpoint->position.x, setpoint->position.y, setpoint->position.z);
   struct vec setpointVel = mkvec(setpoint->velocity.x, setpoint->velocity.y, setpoint->velocity.z);
   struct vec statePos = mkvec(state->position.x, state->position.y, state->position.z);
@@ -152,9 +155,17 @@ void controllerMellinger(control_t *control, setpoint_t *setpoint,
 
   // Position Error (ep)
   r_error = vsub(setpointPos, statePos);
+  // limit position error
+  if (vmag(r_error) > e_bound_pos) {
+    r_error = vscl(e_bound_pos, vnormalize(r_error));
+  }
 
   // Velocity Error (ev)
   v_error = vsub(setpointVel, stateVel);
+  // limit velocity error
+  if (vmag(v_error) > e_bound_vel) {
+    v_error = vscl(e_bound_vel, vnormalize(v_error));
+  }
 
   // Integral Error
   i_error_z += r_error.z * dt;
@@ -330,6 +341,8 @@ PARAM_ADD(PARAM_FLOAT, ki_m_z, &ki_m_z)
 PARAM_ADD(PARAM_FLOAT, kd_omega_rp, &kd_omega_rp)
 PARAM_ADD(PARAM_FLOAT, i_range_m_xy, &i_range_m_xy)
 PARAM_ADD(PARAM_FLOAT, i_range_m_z, &i_range_m_z)
+PARAM_ADD(PARAM_FLOAT, e_bound_pos, &e_bound_pos)
+PARAM_ADD(PARAM_FLOAT, e_bound_vel, &e_bound_vel)
 PARAM_GROUP_STOP(ctrlMel)
 
 LOG_GROUP_START(ctrlMel)
