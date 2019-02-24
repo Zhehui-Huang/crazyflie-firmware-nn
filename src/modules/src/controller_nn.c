@@ -4,6 +4,7 @@
 #include <math.h>
 #include "controller_nn.h"
 #include "log.h"
+#include "param.h"
 #include "usec_time.h"
 
 
@@ -179,6 +180,10 @@ void thrusts2PWM(control_t_n *control_n,
 
 	#endif
 }
+
+PARAM_GROUP_START(ctrlNN)
+PARAM_ADD(PARAM_FLOAT, max_thrust, &maxThrustFactor)
+PARAM_GROUP_STOP(ctrlNN)
 
 LOG_GROUP_START(ctrlNN)
 LOG_ADD(LOG_FLOAT, out0, &control_n.thrust_0)

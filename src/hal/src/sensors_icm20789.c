@@ -112,7 +112,7 @@ static float accScale = 1;
 #define GYRO_LPF_CUTOFF_FREQ  80
 #define ACCEL_LPF_CUTOFF_FREQ 30
 static lpf2pData accLpf[3];
-static lpf2pData gyroLpf[3];
+// static lpf2pData gyroLpf[3];
 static void applyAxis3fLpf(lpf2pData *data, Axis3f* in);
 
 static bool isBarometerPresent = false;
@@ -260,7 +260,7 @@ void processAccGyroMeasurements(const uint8_t *buffer)
   sensors.gyro.x =  (gx - gyroBias.x) * SENSORS_DEG_PER_LSB_CFG;
   sensors.gyro.y = -(gy - gyroBias.y) * SENSORS_DEG_PER_LSB_CFG;
   sensors.gyro.z =  (gz - gyroBias.z) * SENSORS_DEG_PER_LSB_CFG;
-  applyAxis3fLpf((lpf2pData*)(&gyroLpf), &sensors.gyro);
+  // applyAxis3fLpf((lpf2pData*)(&gyroLpf), &sensors.gyro);
 
   accScaled.x =  (ax) * SENSORS_G_PER_LSB_CFG / accScale;
   accScaled.y = -(ay) * SENSORS_G_PER_LSB_CFG / accScale;
@@ -298,12 +298,12 @@ static void sensorsDeviceInit(void)
   }
 #endif
 
-  // Init second order filer for accelerometer
-  for (uint8_t i = 0; i < 3; i++)
-  {
-    lpf2pInit(&gyroLpf[i], 1000, GYRO_LPF_CUTOFF_FREQ);
-    lpf2pInit(&accLpf[i],  1000, ACCEL_LPF_CUTOFF_FREQ);
-  }
+  // // Init second order filer for accelerometer
+  // for (uint8_t i = 0; i < 3; i++)
+  // {
+  //   lpf2pInit(&gyroLpf[i], 1000, GYRO_LPF_CUTOFF_FREQ);
+  //   lpf2pInit(&accLpf[i],  1000, ACCEL_LPF_CUTOFF_FREQ);
+  // }
 
   cosPitch = cosf(configblockGetCalibPitch() * (float) M_PI/180);
   sinPitch = sinf(configblockGetCalibPitch() * (float) M_PI/180);

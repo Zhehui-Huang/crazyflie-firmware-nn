@@ -45,6 +45,8 @@
 #include "mpu6500.h"
 #include "icm20789.h"
 
+#define ICM20789_GYRO_8KHZ_DLPF250
+
 /* Defines for the SPI and GPIO pins used to drive the SPI Flash */
 #define RZR_GPIO_CS             GPIO_Pin_14
 #define RZR_GPIO_CS_PORT        GPIOC

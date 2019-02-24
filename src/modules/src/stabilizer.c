@@ -162,7 +162,7 @@ static void stabilizerTask(void* param)
 
     commanderGetSetpoint(&setpoint, &state);
 
-    sitAwUpdateSetpoint(&setpoint, &sensorData, &state);
+    // sitAwUpdateSetpoint(&setpoint, &sensorData, &state);
 
     controller(&control, &setpoint, &sensorData, &state, tick);
 
@@ -254,11 +254,11 @@ LOG_GROUP_STOP(ctrltarget)
 // LOG_ADD(LOG_UINT16, thrust, &control.thrust)
 // LOG_GROUP_STOP(stabilizer)
 
-// LOG_GROUP_START(acc)
-// LOG_ADD(LOG_FLOAT, x, &sensorData.acc.x)
-// LOG_ADD(LOG_FLOAT, y, &sensorData.acc.y)
-// LOG_ADD(LOG_FLOAT, z, &sensorData.acc.z)
-// LOG_GROUP_STOP(acc)
+LOG_GROUP_START(acc)
+LOG_ADD(LOG_FLOAT, x, &sensorData.acc.x)
+LOG_ADD(LOG_FLOAT, y, &sensorData.acc.y)
+LOG_ADD(LOG_FLOAT, z, &sensorData.acc.z)
+LOG_GROUP_STOP(acc)
 
 #ifdef LOG_SEC_IMU
 LOG_GROUP_START(accSec)

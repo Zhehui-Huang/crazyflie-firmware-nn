@@ -91,6 +91,8 @@ static struct vec pos; // last known setpoint (position [m])
 static float yaw; // last known setpoint yaw (yaw [rad])
 static struct piecewise_traj trajectory;
 
+static uint32_t numCmdsRcvd;
+
 // makes sure that we don't evaluate the trajectory while it is being changed
 static xSemaphoreHandle lockTraj;
 
@@ -310,6 +312,7 @@ int takeoff(const struct data_takeoff* data)
     xSemaphoreTake(lockTraj, portMAX_DELAY);
     float t = usecTimestamp() / 1e6;
     result = plan_takeoff(&planner, pos, yaw, data->height, data->duration, t);
+    numCmdsRcvd += 1;
     xSemaphoreGive(lockTraj);
   }
   return result;
@@ -395,3 +398,8 @@ int define_trajectory(const struct data_define_trajectory* data)
   trajectory_descriptions[data->trajectoryId] = data->description;
   return 0;
 }
+
+LOG_GROUP_START(chlDbg)
+LOG_ADD(LOG_UINT32, numCmdsRcvd, &numCmdsRcvd)
+LOG_ADD(LOG_UINT8, state, &planner.state)
+LOG_GROUP_STOP(chlDbg)

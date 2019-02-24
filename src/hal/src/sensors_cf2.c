@@ -343,6 +343,9 @@ static void sensorsDeviceInit(void)
   mpu6500SetFullScaleAccelRange(SENSORS_ACCEL_FS_CFG);
   // Set accelerometer digital low-pass bandwidth
   mpu6500SetAccelDLPF(MPU6500_ACCEL_DLPF_BW_41);
+  // mpu6500SetAccelDLPF(MPU6500_ACCEL_DLPF_BW_460);
+
+  
 
   // Gyro modes (see page 13 in RM-MPU-9250A-00-v1.6.pdf):
   // // 1. [default CF firmware] 92 Hz Bandwidth, 3.9ms delay, Fs = 1000 Hz
@@ -364,12 +367,16 @@ static void sensorsDeviceInit(void)
   // mpu6500SetRate(31); // 32000 / (1 + 31) = 1000Hz
   // mpu9250SetFchoiceInverted(1); // Fchoice = bx0 => inverted = bx1
 
-  // Init second order filer for accelerometer
-  for (uint8_t i = 0; i < 3; i++)
-  {
-    // lpf2pInit(&gyroLpf[i], 1000, GYRO_LPF_CUTOFF_FREQ);
-    lpf2pInit(&accLpf[i],  1000, ACCEL_LPF_CUTOFF_FREQ);
-  }
+  // // Init second order filer for accelerometer
+  // for (uint8_t i = 0; i < 3; i++)
+  // {
+  //   lpf2pInit(&gyroLpf[i], 1000, GYRO_LPF_CUTOFF_FREQ);
+  //   // lpf2pInit(&accLpf[i],  1000, ACCEL_LPF_CUTOFF_FREQ);
+  // }
+
+  // TODO: Figure out why we need the filter on accel, but we should not initialize it
+  //       Position offset, if: filter there + initialized, or
+  //                            filter not there
 
 
 #ifdef SENSORS_ENABLE_MAG_AK8963
