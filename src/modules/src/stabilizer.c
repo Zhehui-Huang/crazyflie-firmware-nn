@@ -31,6 +31,7 @@
 #include "system.h"
 #include "log.h"
 #include "param.h"
+#include "debug.h"
 
 #include "stabilizer.h"
 
@@ -62,6 +63,8 @@ static float error_dist; // euclidean distance error
 static float error_dist_last; // euclidean distance error over the last 1000 ms
 static int16_t scaled_roll_ctrl;
 static int16_t scaled_pitch_ctrl;
+
+static uint32_t usec_ctrl;
 
 struct vec point2vec(point_t p)
 {
@@ -131,14 +134,17 @@ static void stabilizerTask(void* param)
   uint32_t lastWakeTime;
   vTaskSetApplicationTaskTag(0, (void*)TASK_STABILIZER_ID_NBR);
 
+  DEBUG_PRINT("stab waiting!\n");
   //Wait for the system to be fully started to start stabilization loop
   systemWaitStart();
 
+  DEBUG_PRINT("stab wait for sensors!\n");
   // Wait for sensors to be calibrated
   lastWakeTime = xTaskGetTickCount ();
   while(!sensorsAreCalibrated()) {
     vTaskDelayUntil(&lastWakeTime, F2T(RATE_MAIN_LOOP));
   }
+  DEBUG_PRINT("stab ready!\n");
   // Initialize tick to something else then 0
   tick = 1;
 
@@ -164,7 +170,12 @@ static void stabilizerTask(void* param)
 
     // sitAwUpdateSetpoint(&setpoint, &sensorData, &state);
 
+    uint64_t start = usecTimestamp();
     controller(&control, &setpoint, &sensorData, &state, tick);
+
+    if (RATE_DO_EXECUTE(/*RATE_100_HZ*/500, tick)) {
+      usec_ctrl = (uint32_t) (usecTimestamp() - start);
+    }
 
     scaled_roll_ctrl = control.roll / 1000;
     scaled_pitch_ctrl = control.pitch / 1000;
@@ -172,7 +183,7 @@ static void stabilizerTask(void* param)
     checkEmergencyStopTimeout();
 
     // TODO: this should go into the sitAw framework
-    bool upsideDown = sensorData.acc.z < -0.5f;
+    bool upsideDown = false; //sensorData.acc.z < -0.5f;
 
     if (emergencyStop || upsideDown) {
       powerStop();
@@ -182,17 +193,17 @@ static void stabilizerTask(void* param)
       powerDistribution(&control);
     }
 
-    // stats
-    if (!crtpCommanderHighLevelIsStopped()) {
-      float const dt = 1.0f / RATE_MAIN_LOOP;
-      struct vec dist = vsub(point2vec(setpoint.position), point2vec(state.position));
-      error_dist += dt * vmag(dist);
+    // // stats
+    // if (!crtpCommanderHighLevelIsStopped()) {
+    //   float const dt = 1.0f / RATE_MAIN_LOOP;
+    //   struct vec dist = vsub(point2vec(setpoint.position), point2vec(state.position));
+    //   error_dist += dt * vmag(dist);
 
-      if (tick % 1000 == 0) {
-        error_dist_last = error_dist;
-        error_dist = 0;
-      }
-    }
+    //   if (tick % 1000 == 0) {
+    //     error_dist_last = error_dist;
+    //     error_dist = 0;
+    //   }
+    // }
 
     if (   usddeckLoggingEnabled()
         && usddeckLoggingMode() == usddeckLoggingMode_SynchronousStabilizer
@@ -247,12 +258,12 @@ LOG_ADD(LOG_FLOAT, pitchRate, &setpoint.attitudeRate.pitch)
 LOG_ADD(LOG_FLOAT, yawRate, &setpoint.attitudeRate.yaw)
 LOG_GROUP_STOP(ctrltarget)
 
-// LOG_GROUP_START(stabilizer)
-// LOG_ADD(LOG_FLOAT, roll, &state.attitude.roll)
-// LOG_ADD(LOG_FLOAT, pitch, &state.attitude.pitch)
-// LOG_ADD(LOG_FLOAT, yaw, &state.attitude.yaw)
-// LOG_ADD(LOG_UINT16, thrust, &control.thrust)
-// LOG_GROUP_STOP(stabilizer)
+LOG_GROUP_START(stabilizer)
+LOG_ADD(LOG_FLOAT, roll, &state.attitude.roll)
+LOG_ADD(LOG_FLOAT, pitch, &state.attitude.pitch)
+LOG_ADD(LOG_FLOAT, yaw, &state.attitude.yaw)
+LOG_ADD(LOG_UINT16, thrust, &control.thrust)
+LOG_GROUP_STOP(stabilizer)
 
 LOG_GROUP_START(acc)
 LOG_ADD(LOG_FLOAT, x, &sensorData.acc.x)
@@ -334,5 +345,6 @@ LOG_GROUP_STOP(stateEstimate)
 
 LOG_GROUP_START(ctrlStat)
 LOG_ADD(LOG_FLOAT, edist, &error_dist_last)
+LOG_ADD(LOG_UINT32, usec_ctrl, &usec_ctrl)
 LOG_GROUP_STOP(ctrlStat)
 

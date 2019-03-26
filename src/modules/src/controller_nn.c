@@ -16,7 +16,9 @@
 
 static bool enableBigQuad = false;
 
-static const float maxThrustFactor = 0.70f;
+static float maxThrustFactor = 0.70f;
+static bool relVel = true;
+static bool relOmega = true;
 
 static control_t_n control_n;
 static struct mat33 rot;
@@ -89,9 +91,15 @@ void controllerNN(control_t *control,
 	state_array[0] = state->position.x - setpoint->position.x;
 	state_array[1] = state->position.y - setpoint->position.y;
 	state_array[2] = state->position.z - setpoint->position.z;
-	state_array[3] = state->velocity.x - setpoint->velocity.x;
-	state_array[4] = state->velocity.y - setpoint->velocity.y;
-	state_array[5] = state->velocity.z - setpoint->velocity.z;
+	if (relVel) {
+		state_array[3] = state->velocity.x - setpoint->velocity.x;
+		state_array[4] = state->velocity.y - setpoint->velocity.y;
+		state_array[5] = state->velocity.z - setpoint->velocity.z;
+	} else {
+		state_array[3] = state->velocity.x;
+		state_array[4] = state->velocity.y;
+		state_array[5] = state->velocity.z;
+	}
 	state_array[6] = rot.m[0][0];
 	state_array[7] = rot.m[0][1];
 	state_array[8] = rot.m[0][2];
@@ -101,9 +109,15 @@ void controllerNN(control_t *control,
 	state_array[12] = rot.m[2][0];
 	state_array[13] = rot.m[2][1];
 	state_array[14] = rot.m[2][2];
-	state_array[15] = omega_roll - radians(setpoint->attitudeRate.roll);
-	state_array[16] = omega_pitch - radians(setpoint->attitudeRate.pitch);
-	state_array[17] = omega_yaw - radians(setpoint->attitudeRate.yaw);
+	if (relOmega) {
+		state_array[15] = omega_roll - radians(setpoint->attitudeRate.roll);
+		state_array[16] = omega_pitch - radians(setpoint->attitudeRate.pitch);
+		state_array[17] = omega_yaw - radians(setpoint->attitudeRate.yaw);
+	} else {
+		state_array[15] = omega_roll;
+		state_array[16] = omega_pitch;
+		state_array[17] = omega_yaw;
+	}
 	// state_array[18] = control_n.thrust_0;
 	// state_array[19] = control_n.thrust_1;
 	// state_array[20] = control_n.thrust_2;
@@ -158,14 +172,24 @@ void thrusts2PWM(control_t_n *control_n,
 	if (enableBigQuad) {
 		// Big quad => output angular velocity of rotors
 
+		// // motor 0
+		// *PWM_0 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_0), 0.0, 1.0));
+		// // motor 1
+		// *PWM_1 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_1), 0.0, 1.0));
+		// // motor
+		// *PWM_2 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_2), 0.0, 1.0));
+		// // motor 3 
+		// *PWM_3 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_3), 0.0, 1.0));
+
 		// motor 0
-		*PWM_0 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_0), 0.0, 1.0));
+		*PWM_0 = maxThrustFactor * UINT16_MAX * clip(scale(control_n->thrust_0), 0.0, 1.0);
 		// motor 1
-		*PWM_1 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_1), 0.0, 1.0));
+		*PWM_1 = maxThrustFactor * UINT16_MAX * clip(scale(control_n->thrust_1), 0.0, 1.0);
 		// motor
-		*PWM_2 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_2), 0.0, 1.0));
+		*PWM_2 = maxThrustFactor * UINT16_MAX * clip(scale(control_n->thrust_2), 0.0, 1.0);
 		// motor 3 
-		*PWM_3 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_3), 0.0, 1.0));
+		*PWM_3 = maxThrustFactor * UINT16_MAX * clip(scale(control_n->thrust_3), 0.0, 1.0);
+
 	} else {
 		// Regular Crazyflie => output thrust directly
 		// motor 0
@@ -183,6 +207,8 @@ void thrusts2PWM(control_t_n *control_n,
 
 PARAM_GROUP_START(ctrlNN)
 PARAM_ADD(PARAM_FLOAT, max_thrust, &maxThrustFactor)
+PARAM_ADD(PARAM_UINT8, rel_vel, &relVel)
+PARAM_ADD(PARAM_UINT8, rel_omega, &relOmega)
 PARAM_GROUP_STOP(ctrlNN)
 
 LOG_GROUP_START(ctrlNN)
