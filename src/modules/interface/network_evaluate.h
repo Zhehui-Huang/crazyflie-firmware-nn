@@ -14,6 +14,6 @@ typedef struct control_t_n {
 	float thrust_3;	
 } control_t_n;
 
-void networkEvaluate(control_t_n *control_n, float *state_array);
+void networkEvaluate(control_t_n *control_n, const float *state_array);
 
 #endif

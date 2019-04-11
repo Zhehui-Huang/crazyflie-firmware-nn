@@ -19,6 +19,8 @@ static bool enableBigQuad = false;
 static float maxThrustFactor = 0.70f;
 static bool relVel = true;
 static bool relOmega = true;
+static bool relXYZ = true;
+static uint16_t freq = 500;
 
 static control_t_n control_n;
 static struct mat33 rot;
@@ -69,7 +71,7 @@ void controllerNN(control_t *control,
 				  const uint32_t tick)
 {
 	control->enableDirectThrust = true;
-	if (!RATE_DO_EXECUTE(/*RATE_100_HZ*/500, tick)) {
+	if (!RATE_DO_EXECUTE(/*RATE_100_HZ*/freq, tick)) {
 		return;
 	}
 
@@ -110,17 +112,19 @@ void controllerNN(control_t *control,
 	state_array[13] = rot.m[2][1];
 	state_array[14] = rot.m[2][2];
 
-	// rotate pos and vel
-	struct vec rot_pos = mvmult(mtranspose(rot), mkvec(state_array[0], state_array[1], state_array[2]));
-	struct vec rot_vel = mvmult(mtranspose(rot), mkvec(state_array[3], state_array[4], state_array[5]));
+	if (relXYZ) {
+		// rotate pos and vel
+		struct vec rot_pos = mvmult(mtranspose(rot), mkvec(state_array[0], state_array[1], state_array[2]));
+		struct vec rot_vel = mvmult(mtranspose(rot), mkvec(state_array[3], state_array[4], state_array[5]));
 
-	state_array[0] = rot_pos.x;
-	state_array[1] = rot_pos.y;
-	state_array[2] = rot_pos.z;
+		state_array[0] = rot_pos.x;
+		state_array[1] = rot_pos.y;
+		state_array[2] = rot_pos.z;
 
-	state_array[3] = rot_vel.x;
-	state_array[4] = rot_vel.y;
-	state_array[5] = rot_vel.z;
+		state_array[3] = rot_vel.x;
+		state_array[4] = rot_vel.y;
+		state_array[5] = rot_vel.z;
+	}	
 
 	if (relOmega) {
 		state_array[15] = omega_roll - radians(setpoint->attitudeRate.roll);
@@ -222,6 +226,8 @@ PARAM_GROUP_START(ctrlNN)
 PARAM_ADD(PARAM_FLOAT, max_thrust, &maxThrustFactor)
 PARAM_ADD(PARAM_UINT8, rel_vel, &relVel)
 PARAM_ADD(PARAM_UINT8, rel_omega, &relOmega)
+PARAM_ADD(PARAM_UINT8, rel_xyz, &relXYZ)
+PARAM_ADD(PARAM_UINT16, freq, &freq)
 PARAM_GROUP_STOP(ctrlNN)
 
 LOG_GROUP_START(ctrlNN)
