@@ -88,7 +88,8 @@ void estimatorKalmanUSC(state_t *state, sensorData_t *sensors, control_t *contro
 		positionExternalFresh = false;
 	}
 
-	float acc[3] = {sensors->acc.x * GRAV, sensors->acc.y * GRAV, sensors->acc.z * GRAV};
+	// float acc[3] = {sensors->acc.x * GRAV, sensors->acc.y * GRAV, sensors->acc.z * GRAV};
+	float acc[3] = {0, 0, GRAV};
 	float gyro[3] = {radians(sensors->gyro.x), radians(sensors->gyro.y), radians(sensors->gyro.z)};
 	ekf_imu(ekf_back, ekf_front, acc, gyro, ATTITUDE_UPDATE_DT);
 	ekf_flip();
