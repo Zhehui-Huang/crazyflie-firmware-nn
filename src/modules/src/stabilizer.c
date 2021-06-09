@@ -74,6 +74,10 @@ static control_t control;
 static StateEstimatorType estimatorType;
 static ControllerType controllerType;
 
+// statistics
+static int16_t scaled_roll_ctrl;
+static int16_t scaled_pitch_ctrl;
+
 typedef enum { configureAcc, measureNoiseFloor, measureProp, testBattery, restartBatTest, evaluateResult, testDone } TestState;
 #ifdef RUN_PROP_TEST_AT_STARTUP
   static TestState testState = configureAcc;
@@ -281,6 +285,7 @@ static void stabilizerTask(void* param)
         controllerType = getControllerType();
       }
 
+      control.enableDirectThrust = false;
       stateEstimator(&state, &sensorData, &control, tick);
       compressState();
 
@@ -291,6 +296,9 @@ static void stabilizerTask(void* param)
       collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
       controller(&control, &setpoint, &sensorData, &state, tick);
+
+      scaled_roll_ctrl = control.roll / 1000;
+      scaled_pitch_ctrl = control.pitch / 1000;
 
       checkEmergencyStopTimeout();
 
