@@ -163,18 +163,19 @@ void controllerNN(control_t *control,
     for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
 
       peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
+      if (otherPos == NULL || otherPos->id == 0) {
+          continue;
+      }
+
+      if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
+          continue;
+      }
+
       pos_neighbor_prev[0] = otherPos->pos.x;
       pos_neighbor_prev[1] = otherPos->pos.y;
       pos_neighbor_prev[2] = otherPos->pos.z;
       timestamp_prev = otherPos->pos.timestamp;
 
-      if (otherPos == NULL || otherPos->id == 0) {
-        continue;
-      }
-
-      if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
-        continue;
-      }
       neighbor_idx = i;
     }
   }
@@ -182,8 +183,8 @@ void controllerNN(control_t *control,
   peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByID(neighbor_idx);
 	if (otherPos == NULL || otherPos->id == 0) {
 	  pos_neighbor_curr[0] = pos_neighbor_prev[0];
-    pos_neighbor_curr[1] = pos_neighbor_prev[1];
-    pos_neighbor_curr[2] = pos_neighbor_prev[2];
+	  pos_neighbor_curr[1] = pos_neighbor_prev[1];
+	  pos_neighbor_curr[2] = pos_neighbor_prev[2];
 	  timestamp_curr = timestamp_prev;
 	}else if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
     pos_neighbor_curr[0] = pos_neighbor_prev[0];
@@ -242,7 +243,8 @@ void controllerNN(control_t *control,
 
 	// run the neural neural network
 	uint64_t start = usecTimestamp();
-	networkEvaluate(&control_n, state_array, neighbor_state_array);
+//    networkEvaluate(&control_n, state_array);
+  networkEvaluate(&control_n, state_array, neighbor_state_array); // with neighbor obs
 	usec_eval = (uint32_t) (usecTimestamp() - start);
 
 	// convert thrusts to directly to PWM
@@ -347,6 +349,12 @@ LOG_ADD(LOG_FLOAT, in5, &state_array[5])
 LOG_ADD(LOG_FLOAT, in15, &state_array[15])
 LOG_ADD(LOG_FLOAT, in16, &state_array[16])
 LOG_ADD(LOG_FLOAT, in17, &state_array[17])
+LOG_ADD(LOG_FLOAT, nPos0, &neighbor_state_array[0])
+LOG_ADD(LOG_FLOAT, nPos1, &neighbor_state_array[1])
+LOG_ADD(LOG_FLOAT, nPos2, &neighbor_state_array[2])
+LOG_ADD(LOG_FLOAT, nVel0, &neighbor_state_array[3])
+LOG_ADD(LOG_FLOAT, nVel1, &neighbor_state_array[4])
+LOG_ADD(LOG_FLOAT, nVel2, &neighbor_state_array[5])
 
 LOG_ADD(LOG_UINT32, usec_eval, &usec_eval)
 

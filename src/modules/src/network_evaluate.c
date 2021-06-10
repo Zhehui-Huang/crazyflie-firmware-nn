@@ -107,6 +107,11 @@ void networkEvaluate(struct control_t_n *control_n, const float *state_array, co
         control_n->thrust_1 = output_5[1];
         control_n->thrust_2 = output_5[2];
         control_n->thrust_3 = output_5[3];
+
+//        control_n->thrust_0 = 0.5;
+//        control_n->thrust_1 = 0.5;
+//        control_n->thrust_2 = 0.5;
+//        control_n->thrust_3 = 0.5;
 }
 
 

@@ -65,7 +65,12 @@ static const float layer_2_bias[4] = {-0.01251776,-0.037491553,-0.048874404,-0.0
 		control_n->thrust_0 = output_2[0];
 		control_n->thrust_1 = output_2[1];
 		control_n->thrust_2 = output_2[2];
-		control_n->thrust_3 = output_2[3];	
-	
-	}
+		control_n->thrust_3 = output_2[3];
+
+//        control_n->thrust_0 = 0.8;
+//        control_n->thrust_1 = 0.8;
+//        control_n->thrust_2 = 0.8;
+//        control_n->thrust_3 = 0.8;
+
+    }
 	
