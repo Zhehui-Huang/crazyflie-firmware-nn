@@ -32,13 +32,13 @@ static float state_array[18];
 // static float state_array[22];
 
 // vars related to neighbor drone(s)
-uint8_t neighbor_idx = -1;
-static float pos_neighbor_prev[3] = {0};
-static float pos_neighbor_curr[3];
+static float pos_neighbor_prev[3] = {10};
+static float pos_neighbor_curr[3] = {10};
 static float timestamp_prev = 0.0f;
-static float timestamp_curr;
+static float timestamp_curr = 0.0f;
+static float dt = 0.0f;
 static float deltaPos[3];
-static float vel_neighbor_rel[3];
+static float vel_neighbor_rel[3] = {0};
 static float neighbor_state_array[6];
 static float maxPeerLocAgeMillis = 2000;
 
@@ -155,78 +155,62 @@ void controllerNN(control_t *control,
 	// state_array[20] = control_n.thrust_2;
 	// state_array[21] = control_n.thrust_3;
 
-	//get neighbor pos/vel data
+	//get neighbor pos/vel data and update every 0.01s
 	//TODO: This only supports one other neighbor. Vectorize to support N neighbors
   TickType_t const time = xTaskGetTickCount();
   bool doAgeFilter = maxPeerLocAgeMillis >= 0;
-	if (neighbor_idx == -1) {
-    for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
 
-      peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
-      if (otherPos == NULL || otherPos->id == 0) {
-          continue;
-      }
+  for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
 
-      if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
-          continue;
-      }
-
-      pos_neighbor_prev[0] = otherPos->pos.x;
-      pos_neighbor_prev[1] = otherPos->pos.y;
-      pos_neighbor_prev[2] = otherPos->pos.z;
-      timestamp_prev = otherPos->pos.timestamp;
-
-      neighbor_idx = i;
+    peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
+    if (otherPos == NULL || otherPos->id == 0) {
+        continue;
     }
-  }
 
-  peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByID(neighbor_idx);
-	if (otherPos == NULL || otherPos->id == 0) {
-	  pos_neighbor_curr[0] = pos_neighbor_prev[0];
-	  pos_neighbor_curr[1] = pos_neighbor_prev[1];
-	  pos_neighbor_curr[2] = pos_neighbor_prev[2];
-	  timestamp_curr = timestamp_prev;
-	}else if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
-    pos_neighbor_curr[0] = pos_neighbor_prev[0];
-    pos_neighbor_curr[1] = pos_neighbor_prev[1];
-    pos_neighbor_curr[2] = pos_neighbor_prev[2];
-    timestamp_curr = timestamp_prev;
-  }else{
+    if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
+        continue;
+    }
+
     pos_neighbor_curr[0] = otherPos->pos.x;
     pos_neighbor_curr[1] = otherPos->pos.y;
     pos_neighbor_curr[2] = otherPos->pos.z;
     timestamp_curr = otherPos->pos.timestamp;
-	}
 
-  const float dt = timestamp_curr - timestamp_prev;
+  }
 
-  deltaPos[0] = pos_neighbor_curr[0] - pos_neighbor_prev[0];
-  deltaPos[1] = pos_neighbor_curr[1] - pos_neighbor_prev[1];
-  deltaPos[2] = pos_neighbor_curr[2] - pos_neighbor_prev[2];
+  dt = timestamp_curr - timestamp_prev;
+  if (dt > 10) { // update pos/vel every 100ms
+    dt = dt / 1000.0; // convert to seconds
+    deltaPos[0] = pos_neighbor_curr[0] - pos_neighbor_prev[0];
+    deltaPos[1] = pos_neighbor_curr[1] - pos_neighbor_prev[1];
+    deltaPos[2] = pos_neighbor_curr[2] - pos_neighbor_prev[2];
 
-  if (dt == 0) {
-    // manually set neighbor vel to 0. So (0, 0, 0) - self_velocity
-    vel_neighbor_rel[0] = -state_array[3];
-    vel_neighbor_rel[1] = -state_array[4];
-    vel_neighbor_rel[2] = -state_array[5];
-  } else {
+    // update the velocity estimate
     vel_neighbor_rel[0] = (deltaPos[0] / dt) - state_array[3];
     vel_neighbor_rel[1] = (deltaPos[1] / dt) - state_array[4];
     vel_neighbor_rel[2] = (deltaPos[2] / dt) - state_array[5];
-  }
 
-  if (relXYZ) {
-    // rotate neighbor pos and vel
-    struct vec rot_neighbor_pos = mvmul(mtranspose(rot), mkvec(pos_neighbor_curr[0], pos_neighbor_curr[1], pos_neighbor_curr[2]));
-    struct vec rot_neighbor_vel = mvmul(mtranspose(rot), mkvec(vel_neighbor_rel[0], vel_neighbor_rel[1], vel_neighbor_rel[2]));
 
-    pos_neighbor_curr[0] = rot_neighbor_pos.x;
-    pos_neighbor_curr[1] = rot_neighbor_pos.y;
-    pos_neighbor_curr[2] = rot_neighbor_pos.z;
+    if (relXYZ) {
+      // rotate neighbor pos and vel
+      struct vec rot_neighbor_pos = mvmul(mtranspose(rot),
+                                          mkvec(pos_neighbor_curr[0], pos_neighbor_curr[1], pos_neighbor_curr[2]));
+      struct vec rot_neighbor_vel = mvmul(mtranspose(rot),
+                                          mkvec(vel_neighbor_rel[0], vel_neighbor_rel[1], vel_neighbor_rel[2]));
 
-    vel_neighbor_rel[0] = rot_neighbor_vel.x;
-    vel_neighbor_rel[1] = rot_neighbor_vel.y;
-    vel_neighbor_rel[2] = rot_neighbor_vel.z;
+      pos_neighbor_curr[0] = rot_neighbor_pos.x;
+      pos_neighbor_curr[1] = rot_neighbor_pos.y;
+      pos_neighbor_curr[2] = rot_neighbor_pos.z;
+
+      vel_neighbor_rel[0] = rot_neighbor_vel.x;
+      vel_neighbor_rel[1] = rot_neighbor_vel.y;
+      vel_neighbor_rel[2] = rot_neighbor_vel.z;
+    }
+
+    pos_neighbor_prev[0] = pos_neighbor_curr[0];
+    pos_neighbor_prev[1] = pos_neighbor_curr[1];
+    pos_neighbor_prev[2] = pos_neighbor_curr[2];
+    timestamp_prev = timestamp_curr;
   }
 
   neighbor_state_array[0] = pos_neighbor_curr[0];
@@ -236,10 +220,14 @@ void controllerNN(control_t *control,
   neighbor_state_array[4] = vel_neighbor_rel[1];
   neighbor_state_array[5] = vel_neighbor_rel[2];
 
-  pos_neighbor_prev[0] = pos_neighbor_curr[0];
-  pos_neighbor_prev[1] = pos_neighbor_curr[1];
-  pos_neighbor_prev[2] = pos_neighbor_curr[2];
 
+
+//  neighbor_state_array[0] = 1;
+//  neighbor_state_array[1] = 0;
+//  neighbor_state_array[2] = 0;
+//  neighbor_state_array[3] = 0;
+//  neighbor_state_array[4] = 0;
+//  neighbor_state_array[5] = 0.5;
 
 	// run the neural neural network
 	uint64_t start = usecTimestamp();
@@ -338,23 +326,24 @@ LOG_ADD(LOG_FLOAT, out1, &control_n.thrust_1)
 LOG_ADD(LOG_FLOAT, out2, &control_n.thrust_2)
 LOG_ADD(LOG_FLOAT, out3, &control_n.thrust_3)
 
-LOG_ADD(LOG_FLOAT, in0, &state_array[0])
-LOG_ADD(LOG_FLOAT, in1, &state_array[1])
-LOG_ADD(LOG_FLOAT, in2, &state_array[2])
-
-LOG_ADD(LOG_FLOAT, in3, &state_array[3])
-LOG_ADD(LOG_FLOAT, in4, &state_array[4])
-LOG_ADD(LOG_FLOAT, in5, &state_array[5])
-
-LOG_ADD(LOG_FLOAT, in15, &state_array[15])
-LOG_ADD(LOG_FLOAT, in16, &state_array[16])
-LOG_ADD(LOG_FLOAT, in17, &state_array[17])
+//LOG_ADD(LOG_FLOAT, in0, &state_array[0])
+//LOG_ADD(LOG_FLOAT, in1, &state_array[1])
+//LOG_ADD(LOG_FLOAT, in2, &state_array[2])
+//
+//LOG_ADD(LOG_FLOAT, in3, &state_array[3])
+//LOG_ADD(LOG_FLOAT, in4, &state_array[4])
+//LOG_ADD(LOG_FLOAT, in5, &state_array[5])
+//
+//LOG_ADD(LOG_FLOAT, in15, &state_array[15])
+//LOG_ADD(LOG_FLOAT, in16, &state_array[16])
+//LOG_ADD(LOG_FLOAT, in17, &state_array[17])
 LOG_ADD(LOG_FLOAT, nPos0, &neighbor_state_array[0])
 LOG_ADD(LOG_FLOAT, nPos1, &neighbor_state_array[1])
 LOG_ADD(LOG_FLOAT, nPos2, &neighbor_state_array[2])
 LOG_ADD(LOG_FLOAT, nVel0, &neighbor_state_array[3])
 LOG_ADD(LOG_FLOAT, nVel1, &neighbor_state_array[4])
 LOG_ADD(LOG_FLOAT, nVel2, &neighbor_state_array[5])
+LOG_ADD(LOG_FLOAT, time, &timestamp_curr)
 
 LOG_ADD(LOG_UINT32, usec_eval, &usec_eval)
 
