@@ -39,7 +39,7 @@ static float timestamp_curr = 0.0f;
 static float dt = 0.0f;
 static float deltaPos[3];
 static float vel_neighbor_rel[3] = {0};
-static float neighbor_state_array[6];
+static float neighbor_state_array[6] = {0};
 static float maxPeerLocAgeMillis = 2000;
 
 static uint32_t usec_eval;
@@ -179,7 +179,7 @@ void controllerNN(control_t *control,
   }
 
   dt = timestamp_curr - timestamp_prev;
-  if (dt > 10) { // update pos/vel every 100ms
+  if (dt > 100) { // update pos/vel every 100ms
     dt = dt / 1000.0; // convert to seconds
     deltaPos[0] = pos_neighbor_curr[0] - pos_neighbor_prev[0];
     deltaPos[1] = pos_neighbor_curr[1] - pos_neighbor_prev[1];
@@ -211,23 +211,19 @@ void controllerNN(control_t *control,
     pos_neighbor_prev[1] = pos_neighbor_curr[1];
     pos_neighbor_prev[2] = pos_neighbor_curr[2];
     timestamp_prev = timestamp_curr;
+
+    // update the neighbor obs
+    neighbor_state_array[0] = pos_neighbor_curr[0];
+    neighbor_state_array[1] = pos_neighbor_curr[1];
+    neighbor_state_array[2] = pos_neighbor_curr[2];
+    neighbor_state_array[3] = vel_neighbor_rel[0];
+    neighbor_state_array[4] = vel_neighbor_rel[1];
+    neighbor_state_array[5] = vel_neighbor_rel[2];
+
+    // update embedding for neighbor obs
+    neighborEmbeddings(neighbor_state_array);
   }
 
-  neighbor_state_array[0] = pos_neighbor_curr[0];
-  neighbor_state_array[1] = pos_neighbor_curr[1];
-  neighbor_state_array[2] = pos_neighbor_curr[2];
-  neighbor_state_array[3] = vel_neighbor_rel[0];
-  neighbor_state_array[4] = vel_neighbor_rel[1];
-  neighbor_state_array[5] = vel_neighbor_rel[2];
-
-
-
-//  neighbor_state_array[0] = 1;
-//  neighbor_state_array[1] = 0;
-//  neighbor_state_array[2] = 0;
-//  neighbor_state_array[3] = 0;
-//  neighbor_state_array[4] = 0;
-//  neighbor_state_array[5] = 0.5;
 
 	// run the neural neural network
 	uint64_t start = usecTimestamp();

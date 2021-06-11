@@ -15,5 +15,6 @@ typedef struct control_t_n {
 } control_t_n;
 
 void networkEvaluate(control_t_n *control_n, const float *state_array, const float* neighbor_array);
+void neighborEmbeddings(const float *neighbor_array);
 
 #endif
