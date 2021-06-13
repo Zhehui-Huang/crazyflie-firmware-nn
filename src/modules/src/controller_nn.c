@@ -32,14 +32,16 @@ static float state_array[18];
 // static float state_array[22];
 
 // vars related to neighbor drone(s)
-static float pos_neighbor_prev[3] = {10};
-static float pos_neighbor_curr[3] = {10};
-static float timestamp_prev = 0.0f;
-static float timestamp_curr = 0.0f;
-static float dt = 0.0f;
-static float deltaPos[3];
-static float vel_neighbor_rel[3] = {0};
-static float neighbor_state_array[6] = {0};
+// multiple neighbors
+static point_t pos_neighbors_prev[100];
+static point_t pos_neighbors_curr[100]; // idx into this array is the cfid
+static int cf_ids[NEIGHBORS];
+static float deltaPoses[NEIGHBORS][3];
+static float pos_neighbors_rel[NEIGHBORS][3] = {0};
+static float vel_neighbors_rel[NEIGHBORS][3] = {0};
+static float neighbors_state_array[NEIGHBORS][6] = {0};
+static int cf_idx = 0;
+static TickType_t time_prev = 0.0f;
 static float maxPeerLocAgeMillis = 2000;
 
 static uint32_t usec_eval;
@@ -155,80 +157,81 @@ void controllerNN(control_t *control,
 	// state_array[20] = control_n.thrust_2;
 	// state_array[21] = control_n.thrust_3;
 
-	//get neighbor pos/vel data and update every 0.01s
-	//TODO: This only supports one other neighbor. Vectorize to support N neighbors
+	//get neighbor pos/vel data and update at 10hz
   TickType_t const time = xTaskGetTickCount();
-  bool doAgeFilter = maxPeerLocAgeMillis >= 0;
-
-  for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
-
-    peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
-    if (otherPos == NULL || otherPos->id == 0) {
-        continue;
-    }
-
-    if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
-        continue;
-    }
-
-    pos_neighbor_curr[0] = otherPos->pos.x;
-    pos_neighbor_curr[1] = otherPos->pos.y;
-    pos_neighbor_curr[2] = otherPos->pos.z;
-    timestamp_curr = otherPos->pos.timestamp;
-
-  }
-
-  dt = timestamp_curr - timestamp_prev;
-  if (dt > 100) { // update pos/vel every 100ms
+	TickType_t dt = time - time_prev;
+	if (dt > 100) { // update pos/vel every 100ms
     dt = dt / 1000.0; // convert to seconds
-    deltaPos[0] = pos_neighbor_curr[0] - pos_neighbor_prev[0];
-    deltaPos[1] = pos_neighbor_curr[1] - pos_neighbor_prev[1];
-    deltaPos[2] = pos_neighbor_curr[2] - pos_neighbor_prev[2];
+    bool doAgeFilter = maxPeerLocAgeMillis >= 0;
+    for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
 
-    // update the velocity estimate
-    vel_neighbor_rel[0] = (deltaPos[0] / dt) - state_array[3];
-    vel_neighbor_rel[1] = (deltaPos[1] / dt) - state_array[4];
-    vel_neighbor_rel[2] = (deltaPos[2] / dt) - state_array[5];
+      peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
+      if (otherPos == NULL || otherPos->id == 0) {
+        continue;
+      }
 
-
-    if (relXYZ) {
-      // rotate neighbor pos and vel
-      struct vec rot_neighbor_pos = mvmul(mtranspose(rot),
-                                          mkvec(pos_neighbor_curr[0], pos_neighbor_curr[1], pos_neighbor_curr[2]));
-      struct vec rot_neighbor_vel = mvmul(mtranspose(rot),
-                                          mkvec(vel_neighbor_rel[0], vel_neighbor_rel[1], vel_neighbor_rel[2]));
-
-      pos_neighbor_curr[0] = rot_neighbor_pos.x;
-      pos_neighbor_curr[1] = rot_neighbor_pos.y;
-      pos_neighbor_curr[2] = rot_neighbor_pos.z;
-
-      vel_neighbor_rel[0] = rot_neighbor_vel.x;
-      vel_neighbor_rel[1] = rot_neighbor_vel.y;
-      vel_neighbor_rel[2] = rot_neighbor_vel.z;
+      if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) { // stale pos info
+        continue;
+      }
+      pos_neighbors_curr[otherPos->id] = otherPos->pos;
+      if (cf_idx < NEIGHBORS) { // save the cf_ids in an array so we can use them later. Do this only once
+        cf_ids[cf_idx] = otherPos->id;
+        cf_idx++;
+      }
     }
 
-    pos_neighbor_prev[0] = pos_neighbor_curr[0];
-    pos_neighbor_prev[1] = pos_neighbor_curr[1];
-    pos_neighbor_prev[2] = pos_neighbor_curr[2];
-    timestamp_prev = timestamp_curr;
+    for (int i = 0; i < NEIGHBORS; i++) {
+      const int cfid = cf_ids[i];
+      float dt = (pos_neighbors_curr[cfid].timestamp - pos_neighbors_prev[cfid].timestamp) / 1000.0; // dt in seconds
+      deltaPoses[i][0] = pos_neighbors_curr[cfid].x - pos_neighbors_prev[cfid].x;
+      deltaPoses[i][1] = pos_neighbors_curr[cfid].y - pos_neighbors_prev[cfid].y;
+      deltaPoses[i][2] = pos_neighbors_curr[cfid].z - pos_neighbors_prev[cfid].z;
 
-    // update the neighbor obs
-    neighbor_state_array[0] = pos_neighbor_curr[0];
-    neighbor_state_array[1] = pos_neighbor_curr[1];
-    neighbor_state_array[2] = pos_neighbor_curr[2];
-    neighbor_state_array[3] = vel_neighbor_rel[0];
-    neighbor_state_array[4] = vel_neighbor_rel[1];
-    neighbor_state_array[5] = vel_neighbor_rel[2];
+      // get the relative positions
+      pos_neighbors_rel[i][0] -= state_array[0];
+      pos_neighbors_rel[i][1] -= state_array[1];
+      pos_neighbors_rel[i][2] -= state_array[2];
 
-    // update embedding for neighbor obs
-    neighborEmbeddings(neighbor_state_array);
-  }
+      // update the velocity estimate
+      vel_neighbors_rel[i][0] = (deltaPoses[i][0] / dt) - state_array[3];
+      vel_neighbors_rel[i][1] = (deltaPoses[i][1] / dt) - state_array[4];
+      vel_neighbors_rel[i][2] = (deltaPoses[i][2] / dt) - state_array[5];
 
+      if (relXYZ) {
+        // rotate neighbor pos and vel. Untested
+        struct vec rot_neighbor_pos = mvmul(mtranspose(rot),
+                                            mkvec(pos_neighbors_rel[i][0], pos_neighbors_rel[i][1], pos_neighbors_rel[i][2]));
+        struct vec rot_neighbor_vel = mvmul(mtranspose(rot),
+                                            mkvec(vel_neighbors_rel[i][0], vel_neighbors_rel[i][1], vel_neighbors_rel[i][2]));
+        pos_neighbors_rel[i][0] = rot_neighbor_pos.x;
+        pos_neighbors_rel[i][1] = rot_neighbor_pos.y;
+        pos_neighbors_rel[i][2] = rot_neighbor_pos.z;
+
+        vel_neighbors_rel[i][0] = rot_neighbor_vel.x;
+        vel_neighbors_rel[i][1] = rot_neighbor_vel.y;
+        vel_neighbors_rel[i][2] = rot_neighbor_vel.z;
+      }
+
+      pos_neighbors_prev[cfid] = pos_neighbors_curr[cfid];
+
+      // update the neighbor obs
+      neighbors_state_array[i][0] = pos_neighbors_rel[i][0];
+      neighbors_state_array[i][1] = pos_neighbors_rel[i][1];
+      neighbors_state_array[i][2] = pos_neighbors_rel[i][2];
+      neighbors_state_array[i][3] = vel_neighbors_rel[i][0];
+      neighbors_state_array[i][4] = vel_neighbors_rel[i][1];
+      neighbors_state_array[i][5] = vel_neighbors_rel[i][2];
+
+      // update embedding for neighbor obs
+      neighborEmbeddings(neighbors_state_array);
+    }
+	}
+  time_prev = time;
 
 	// run the neural neural network
 	uint64_t start = usecTimestamp();
-//    networkEvaluate(&control_n, state_array);
-  networkEvaluate(&control_n, state_array, neighbor_state_array); // with neighbor obs
+    networkEvaluate(&control_n, state_array);
+//  networkEvaluate(&control_n, state_array, neighbors_state_array); // with neighbor obs
 	usec_eval = (uint32_t) (usecTimestamp() - start);
 
 	// convert thrusts to directly to PWM
@@ -313,6 +316,7 @@ PARAM_ADD(PARAM_UINT8, rel_vel, &relVel)
 PARAM_ADD(PARAM_UINT8, rel_omega, &relOmega)
 PARAM_ADD(PARAM_UINT8, rel_xyz, &relXYZ)
 PARAM_ADD(PARAM_UINT8, use_neighbor_obs, &neighborObs)
+PARAM_ADD(PARAM_UINT8, num_neighbors, NEIGHBORS)
 PARAM_ADD(PARAM_UINT16, freq, &freq)
 PARAM_GROUP_STOP(ctrlNN)
 
@@ -333,13 +337,13 @@ LOG_ADD(LOG_FLOAT, out3, &control_n.thrust_3)
 //LOG_ADD(LOG_FLOAT, in15, &state_array[15])
 //LOG_ADD(LOG_FLOAT, in16, &state_array[16])
 //LOG_ADD(LOG_FLOAT, in17, &state_array[17])
-LOG_ADD(LOG_FLOAT, nPos0, &neighbor_state_array[0])
-LOG_ADD(LOG_FLOAT, nPos1, &neighbor_state_array[1])
-LOG_ADD(LOG_FLOAT, nPos2, &neighbor_state_array[2])
-LOG_ADD(LOG_FLOAT, nVel0, &neighbor_state_array[3])
-LOG_ADD(LOG_FLOAT, nVel1, &neighbor_state_array[4])
-LOG_ADD(LOG_FLOAT, nVel2, &neighbor_state_array[5])
-LOG_ADD(LOG_FLOAT, time, &timestamp_curr)
+// pos of whatever the first neighbor drone is
+LOG_ADD(LOG_FLOAT, nPos0, &neighbors_state_array[0][0])
+LOG_ADD(LOG_FLOAT, nPos1, &neighbors_state_array[0][1])
+LOG_ADD(LOG_FLOAT, nPos2, &neighbors_state_array[0][2])
+LOG_ADD(LOG_FLOAT, nVel0, &neighbors_state_array[0][3])
+LOG_ADD(LOG_FLOAT, nVel1, &neighbors_state_array[0][4])
+LOG_ADD(LOG_FLOAT, nVel2, &neighbors_state_array[0][5])
 
 LOG_ADD(LOG_UINT32, usec_eval, &usec_eval)
 

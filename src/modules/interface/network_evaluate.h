@@ -3,6 +3,9 @@
 
 #include <math.h>
 
+#define NEIGHBORS 3
+#define NUM_OBS 6
+
 /*
  * since the network outputs thrust on each motor,
  * we need to define a struct which stores the values
@@ -14,7 +17,7 @@ typedef struct control_t_n {
 	float thrust_3;	
 } control_t_n;
 
-void networkEvaluate(control_t_n *control_n, const float *state_array, const float* neighbor_array);
-void neighborEmbeddings(const float *neighbor_array);
+void networkEvaluate(control_t_n *control_n, const float *state_array);
+void neighborEmbeddings(const float neighbor_array[NEIGHBORS][NUM_OBS]);
 
 #endif
