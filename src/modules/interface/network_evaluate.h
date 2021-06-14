@@ -3,8 +3,9 @@
 
 #include <math.h>
 
-#define NEIGHBORS 3
+#define NEIGHBORS 1
 #define NUM_OBS 6
+#define NUM_IDS 100 // Number of unique cfids
 
 /*
  * since the network outputs thrust on each motor,
@@ -19,5 +20,4 @@ typedef struct control_t_n {
 
 void networkEvaluate(control_t_n *control_n, const float *state_array);
 void neighborEmbeddings(const float neighbor_array[NEIGHBORS][NUM_OBS]);
-
 #endif

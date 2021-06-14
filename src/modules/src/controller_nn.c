@@ -35,12 +35,11 @@ static float state_array[18];
 // multiple neighbors
 static point_t pos_neighbors_prev[100];
 static point_t pos_neighbors_curr[100]; // idx into this array is the cfid
-static int cf_ids[NEIGHBORS];
+static int cf_ids[100] = {-1};
 static float deltaPoses[NEIGHBORS][3];
 static float pos_neighbors_rel[NEIGHBORS][3] = {0};
 static float vel_neighbors_rel[NEIGHBORS][3] = {0};
 static float neighbors_state_array[NEIGHBORS][6] = {0};
-static int cf_idx = 0;
 static TickType_t time_prev = 0.0f;
 static float maxPeerLocAgeMillis = 2000;
 
@@ -159,9 +158,8 @@ void controllerNN(control_t *control,
 
 	//get neighbor pos/vel data and update at 10hz
   TickType_t const time = xTaskGetTickCount();
-	TickType_t dt = time - time_prev;
-	if (dt > 100) { // update pos/vel every 100ms
-    dt = dt / 1000.0; // convert to seconds
+	TickType_t os_dt = time - time_prev; // internal dt
+	if (os_dt > 100) { // update pos/vel every 100ms
     bool doAgeFilter = maxPeerLocAgeMillis >= 0;
     for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
 
@@ -174,14 +172,14 @@ void controllerNN(control_t *control,
         continue;
       }
       pos_neighbors_curr[otherPos->id] = otherPos->pos;
-      if (cf_idx < NEIGHBORS) { // save the cf_ids in an array so we can use them later. Do this only once
-        cf_ids[cf_idx] = otherPos->id;
-        cf_idx++;
-      }
+      cf_ids[otherPos->id] = otherPos->id;
     }
 
-    for (int i = 0; i < NEIGHBORS; i++) {
-      const int cfid = cf_ids[i];
+    for (int i = 0; i < NUM_IDS; i++) {
+      int cfid = cf_ids[i];
+      if (cfid == -1) {
+        continue;
+      }
       float dt = (pos_neighbors_curr[cfid].timestamp - pos_neighbors_prev[cfid].timestamp) / 1000.0; // dt in seconds
       deltaPoses[i][0] = pos_neighbors_curr[cfid].x - pos_neighbors_prev[cfid].x;
       deltaPoses[i][1] = pos_neighbors_curr[cfid].y - pos_neighbors_prev[cfid].y;
@@ -223,7 +221,7 @@ void controllerNN(control_t *control,
       neighbors_state_array[i][5] = vel_neighbors_rel[i][2];
 
       // update embedding for neighbor obs
-      neighborEmbeddings(neighbors_state_array);
+//      neighborEmbeddings(neighbors_state_array);
     }
 	}
   time_prev = time;

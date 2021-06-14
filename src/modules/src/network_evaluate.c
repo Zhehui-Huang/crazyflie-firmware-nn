@@ -6,6 +6,7 @@
 #include <vector>
 #include <iostream>
 #include <algorithm>
+#include <string.h>
 
 #define NEIGHBORS 1
 #define NUM_OBS 6
@@ -46,10 +47,10 @@ float relu(float num) {
 
 //static const int structure [6][2] = {{6, 16},{16, 16},{18, 32},{32, 32},{48, 64},{64, 4}};
 static const int structure [6][2] = {{18, 32},{32, 32},{6, 16},{16, 16},{48, 64},{64,4}};
-static float output_0[16];
+static float output_0[32];
 //static float output_1[16];
-static float output_2[32];
-//static float output_3[32];
+static float output_2[16];
+static float output_3[16];
 static float output_4[64];
 static float output_5[4];
 static float neighbor_embeds[16];
@@ -69,38 +70,35 @@ static const float action_parameterization_distribution_linear_bias[4] = {-0.014
 
 void neighborEmbeddings(const float neighbors_array[NEIGHBORS][NUM_OBS]) {
   //reset embeddings accumulator to zero
-  for (int i = 0; i < 16; i++) {
-    neighbor_embeds[i] = 0;
-  }
+  memset(neighbor_embeds, 0, sizeof(neighbor_embeds));
 
   // get the neighbor embeddings
   for (int n = 0; n < NEIGHBORS; n++) {
-    const float * neighbor_array = neighbors_array[n];
     for (int i = 0; i < structure[2][1]; i++) {
       output_2[i] = 0;
       for (int j = 0; j < structure[2][0]; j++) {
-        output_2[i] += neighbor_array[j] * actor_encoder_neighbor_encoder_embedding_mlp_0_weight[j][i];
+        output_2[i] += neighbors_array[n][j] * actor_encoder_neighbor_encoder_embedding_mlp_0_weight[j][i];
       }
       output_2[i] += actor_encoder_neighbor_encoder_embedding_mlp_0_bias[i];
       output_2[i] = tanhf(output_2[i]);
     }
 
     for (int i = 0; i < structure[3][1]; i++) {
-//      embedding_array[i + self_size] = 0;
+      output_3[i] = 0;
       for (int j = 0; j < structure[3][0]; j++) {
-//        embedding_array[i+self_size] += output_2[j] * actor_encoder_neighbor_encoder_embedding_mlp_2_weight[j][i];
-          neighbor_embeds[i] += output_2[j] * actor_encoder_neighbor_encoder_embedding_mlp_2_weight[j][i];
+          output_3[i] += output_2[j] * actor_encoder_neighbor_encoder_embedding_mlp_2_weight[j][i];
       }
-//      embedding_array[i+ self_size] += actor_encoder_neighbor_encoder_embedding_mlp_2_bias[i];
-//      embedding_array[i + self_size] = tanhf(embedding_array[i + self_size]);
-        neighbor_embeds[i] += actor_encoder_neighbor_encoder_embedding_mlp_2_bias[i];
-        neighbor_embeds[i] = tanhf(neighbor_embeds[i]);
+
+      output_3[i] += actor_encoder_neighbor_encoder_embedding_mlp_2_bias[i];
+      output_3[i] = tanhf(output_3[i]);
+      neighbor_embeds[i] += output_3[i];
     }
   }
 
   int self_size = structure[1][1]; // size of self embeddings. Need to offset by this much in the embedding array
   // get mean embeddings
   for (int i = 0; i < structure[3][1]; i++) {
+//    std::cout << neighbor_embeds[i] << std::endl;
     embedding_array[i+self_size] = neighbor_embeds[i] / NEIGHBORS;
   }
 }
@@ -171,10 +169,13 @@ int main()
           {0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
   };
 
-  std::vector<std::vector<float>> neighbor_arrays_rel{
-          {1, 1, 1, -1, -1, -1}, // neighbor to my top right moving towards me
-          {0, -1, 0, 0, 1, 0}, // neighbor to my left moving away from me
-  };
+
+//  float neighbor_obs_rel{
+//          {1, 1, 1, -1, -1, -1}, // neighbor to my top right moving towards me
+//          {0, -1, 0, 0, 1, 0}, // neighbor to my left moving away from me
+//  };
+
+//  float neighbor_obs[1][6] =
 
   const float neighbor_obs[1][6] = {
           {1, 1, 1, -1, -1, -1}, // neighbor to my top right moving towards me
@@ -189,23 +190,25 @@ int main()
     std::cout << "State: ";
     for (auto x : state)
     std::cout << x << ' ';
-
-    control_t_n motorThrusts;
-    neighborEmbeddings(neighbor_obs);
-    networkEvaluate(&motorThrusts, state.data());
-
-//    for(std::vector<float> neighbor: neighbor_arrays_rel) {
-//      std::cout << "Neighbor state: ";
-//      for (auto x: neighbor)
-//      std:: cout << x << ' ';
 //
-//      control_t_n motorThrusts;
-//      neighborEmbeddings(neighbor.data());
-//      networkEvaluate(&motorThrusts, state.data());
-//
-//      std::cout << "Controls: ";
-//      std::cout << motorThrusts.thrust_0 << ' ' << motorThrusts.thrust_1 << ' ' << motorThrusts.thrust_2 << ' ' << motorThrusts.thrust_3 << std::endl;
-//    }
+//    control_t_n motorThrusts;
+//    neighborEmbeddings(neighbor_obs);
+//    networkEvaluate(&motorThrusts, state.data());
+
+    for(int i = 0; i < 1; i++) {
+      const float * neighbor = neighbor_obs[i];
+      std::cout << "Neighbor state: ";
+      for (int j = 0; j < 6; j++){
+        std::cout << neighbor[j] << ' ';
+      }
+
+      control_t_n motorThrusts;
+      neighborEmbeddings(neighbor_obs);
+      networkEvaluate(&motorThrusts, state.data());
+
+      std::cout << "Controls: ";
+      std::cout << motorThrusts.thrust_0 << ' ' << motorThrusts.thrust_1 << ' ' << motorThrusts.thrust_2 << ' ' << motorThrusts.thrust_3 << std::endl;
+    }
   }
 //	std::cout << "State:\n";
 //	for (auto x : state)
