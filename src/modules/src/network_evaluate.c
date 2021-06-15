@@ -1,29 +1,30 @@
-//#include "network_evaluate.h"
-//#include "debug.h"
-
-#include <math.h>
-#include <random>
-#include <vector>
-#include <iostream>
-#include <algorithm>
+#include "network_evaluate.h"
+#include "debug.h"
+#include "param.h"
 #include <string.h>
 
-#define NEIGHBORS 1
-#define NUM_OBS 6
-
-/*
- * since the network outputs thrust on each motor,
- * we need to define a struct which stores the values
-*/
-typedef struct control_t_n {
-    float thrust_0;
-    float thrust_1;
-    float thrust_2;
-    float thrust_3;
-} control_t_n;
-
-void networkEvaluate(control_t_n *control_n, const float *state_array);
-void neighborEmbeddings(const float neighbor_array[NEIGHBORS][NUM_OBS]);
+//#include <math.h>
+//#include <random>
+//#include <vector>
+//#include <iostream>
+//#include <algorithm>
+//
+//#define NEIGHBORS 1
+//#define NUM_OBS 6
+//
+///*
+// * since the network outputs thrust on each motor,
+// * we need to define a struct which stores the values
+//*/
+//typedef struct control_t_n {
+//    float thrust_0;
+//    float thrust_1;
+//    float thrust_2;
+//    float thrust_3;
+//} control_t_n;
+//
+//void networkEvaluate(control_t_n *control_n, const float *state_array);
+//void neighborEmbeddings(const float neighbor_array[NEIGHBORS][NUM_OBS]);
 
 float linear(float num) {
   return num;
@@ -98,7 +99,6 @@ void neighborEmbeddings(const float neighbors_array[NEIGHBORS][NUM_OBS]) {
   int self_size = structure[1][1]; // size of self embeddings. Need to offset by this much in the embedding array
   // get mean embeddings
   for (int i = 0; i < structure[3][1]; i++) {
-//    std::cout << neighbor_embeds[i] << std::endl;
     embedding_array[i+self_size] = neighbor_embeds[i] / NEIGHBORS;
   }
 }
@@ -149,77 +149,87 @@ void networkEvaluate(struct control_t_n *control_n, const float *state_array) {
   control_n->thrust_3 = output_5[3];
 }
 
-int main()
-{
-//	std::vector<float> state{0.165928, 0.942265, 0.683338, 0.476424, 0.175134, 0.393026, 0.37596, 0.173734, 0.937535, 0.15913, 0.967515, 0.620271, 0.406, 0.990523, 0.404797, 0.968619, 0.853021, 0.956329};
-//	std::vector<float> state{0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0};
-  std::vector<std::vector<float>> states{
-          {0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {0, 0, -1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {0, 0, -2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {-1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {-2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {0, -2, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-          {0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
-  };
-
-
-//  float neighbor_obs_rel{
-//          {1, 1, 1, -1, -1, -1}, // neighbor to my top right moving towards me
-//          {0, -1, 0, 0, 1, 0}, // neighbor to my left moving away from me
+//int main()
+//{
+////	std::vector<float> state{0.165928, 0.942265, 0.683338, 0.476424, 0.175134, 0.393026, 0.37596, 0.173734, 0.937535, 0.15913, 0.967515, 0.620271, 0.406, 0.990523, 0.404797, 0.968619, 0.853021, 0.956329};
+////	std::vector<float> state{0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0};
+//  std::vector<std::vector<float>> states{
+//          {0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {0, 0, -1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {0, 0, -2, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {-1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {-2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {0, 2, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {0, -1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {0, -2, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
+//          {0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0},
 //  };
-
-//  float neighbor_obs[1][6] =
-
-  const float neighbor_obs[1][6] = {
-          {1, 1, 1, -1, -1, -1}, // neighbor to my top right moving towards me
-  };
-
-
-//	std::random_device rnd_device;
-//	std::mt19937 rng{ rnd_device() };
-//	std::uniform_real_distribution<> dist{0, 1};
-//	std::generate(std::begin(state), std::end(state), [&]() {return dist(rng); });
-  for(std::vector<float> state: states) {
-    std::cout << "State: ";
-    for (auto x : state)
-    std::cout << x << ' ';
 //
+//
+////  float neighbor_obs_rel{
+////          {1, 1, 1, -1, -1, -1}, // neighbor to my top right moving towards me
+////          {0, -1, 0, 0, 1, 0}, // neighbor to my left moving away from me
+////  };
+//
+////  float neighbor_obs[1][6] =
+//
+////  const float neighbor_obs[2][6] = {
+////          {1, 1, 1, -1, -1, -1}, // neighbor to my top right moving towards me
+////          { 0.13411005, -0.48878977, -2.10056613,  1.36485453, -0.72864023,
+////            -1.82551435}
+////  };
+//
+//  const float neighbor_obs[1][6] = {
+//          {0.5, 0, 0, 0, 0, 0}, // neighbor to my top right moving towards me
+//  };
+//
+//
+////	std::random_device rnd_device;
+////	std::mt19937 rng{ rnd_device() };
+////	std::uniform_real_distribution<> dist{0, 1};
+////	std::generate(std::begin(state), std::end(state), [&]() {return dist(rng); });
+//  for(std::vector<float> state: states) {
+//    std::cout << "State: ";
+//    for (auto x : state)
+//    std::cout << x << ' ';
+////
+////    control_t_n motorThrusts;
+////    neighborEmbeddings(neighbor_obs);
+////    networkEvaluate(&motorThrusts, state.data());
+//
+//    for(int i = 0; i < 2; i++) {
+//      const float * neighbor = neighbor_obs[i];
+//      std::cout << "Neighbor state: ";
+//      for (int j = 0; j < 6; j++){
+//        std::cout << neighbor[j] << ' ';
+//      }
+//    }
 //    control_t_n motorThrusts;
 //    neighborEmbeddings(neighbor_obs);
 //    networkEvaluate(&motorThrusts, state.data());
-
-    for(int i = 0; i < 1; i++) {
-      const float * neighbor = neighbor_obs[i];
-      std::cout << "Neighbor state: ";
-      for (int j = 0; j < 6; j++){
-        std::cout << neighbor[j] << ' ';
-      }
-
-      control_t_n motorThrusts;
-      neighborEmbeddings(neighbor_obs);
-      networkEvaluate(&motorThrusts, state.data());
-
-      std::cout << "Controls: ";
-      std::cout << motorThrusts.thrust_0 << ' ' << motorThrusts.thrust_1 << ' ' << motorThrusts.thrust_2 << ' ' << motorThrusts.thrust_3 << std::endl;
-    }
-  }
-//	std::cout << "State:\n";
-//	for (auto x : state)
-//		std::cout << x << ' ';
-//	std::cout << '\n';
 //
-//	control_t_n motorThrusts;
-//	networkEvaluate(&motorThrusts, state.data());
+//    std::cout << "Controls: ";
+//    std::cout << motorThrusts.thrust_0 << ' ' << motorThrusts.thrust_1 << ' ' << motorThrusts.thrust_2 << ' ' << motorThrusts.thrust_3 << std::endl;
+//  }
+////	std::cout << "State:\n";
+////	for (auto x : state)
+////		std::cout << x << ' ';
+////	std::cout << '\n';
+////
+////	control_t_n motorThrusts;
+////	networkEvaluate(&motorThrusts, state.data());
+////
+////	std::cout << "Controls:\n";
+////	std::cout << motorThrusts.thrust_0 << ' ' << motorThrusts.thrust_1 << ' ' << motorThrusts.thrust_2 << ' ' << motorThrusts.thrust_3;
 //
-//	std::cout << "Controls:\n";
-//	std::cout << motorThrusts.thrust_0 << ' ' << motorThrusts.thrust_1 << ' ' << motorThrusts.thrust_2 << ' ' << motorThrusts.thrust_3;
+//  return EXIT_SUCCESS;
+//}
 
-  return EXIT_SUCCESS;
-}
+
+PARAM_GROUP_START(multiAgent)
+PARAM_ADD(PARAM_UINT8, neighbors, NEIGHBORS)
+PARAM_GROUP_STOP(multiAgent)

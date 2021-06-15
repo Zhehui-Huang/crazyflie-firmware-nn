@@ -9,6 +9,7 @@
 #include "task.h"
 #include "usec_time.h"
 #include "peer_localization.h"
+#include "debug.h"
 
 
 #define MAX_THRUST 0.15f
@@ -33,14 +34,18 @@ static float state_array[18];
 
 // vars related to neighbor drone(s)
 // multiple neighbors
-static point_t pos_neighbors_prev[100];
-static point_t pos_neighbors_curr[100]; // idx into this array is the cfid
-static int cf_ids[100] = {-1};
-static float deltaPoses[NEIGHBORS][3];
-static float pos_neighbors_rel[NEIGHBORS][3] = {0};
-static float vel_neighbors_rel[NEIGHBORS][3] = {0};
+//static point_t pos_neighbors_prev[NUM_IDS];
+//static point_t pos_neighbors_curr[NUM_IDS]; // idx into this array is the cfid
+static float pos_neighbors_curr[NUM_IDS][4];
+static float pos_neighbors_prev[NUM_IDS][4];
+static int cf_ids[NUM_IDS] = {0};
+static float deltaPoses[NUM_IDS][3];
+static float pos_neighbors_rel[NUM_IDS][3] = {0};
+static float vel_neighbors_rel[NUM_IDS][3] = {0};
 static float neighbors_state_array[NEIGHBORS][6] = {0};
-static TickType_t time_prev = 0.0f;
+static float dt = 1.0;
+static TickType_t os_dt;
+static TickType_t time_prev = 0.0;
 static float maxPeerLocAgeMillis = 2000;
 
 static uint32_t usec_eval;
@@ -158,73 +163,98 @@ void controllerNN(control_t *control,
 
 	//get neighbor pos/vel data and update at 10hz
   TickType_t const time = xTaskGetTickCount();
-	TickType_t os_dt = time - time_prev; // internal dt
-	if (os_dt > 100) { // update pos/vel every 100ms
-    bool doAgeFilter = maxPeerLocAgeMillis >= 0;
-    for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
+	os_dt = time - time_prev; // internal dt
 
-      peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
-      if (otherPos == NULL || otherPos->id == 0) {
-        continue;
-      }
+	DEBUG_PRINT("Getting neighbor obs from vicon\n");
+  bool doAgeFilter = maxPeerLocAgeMillis >= 0;
+  for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
 
-      if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) { // stale pos info
-        continue;
-      }
-      pos_neighbors_curr[otherPos->id] = otherPos->pos;
-      cf_ids[otherPos->id] = otherPos->id;
+    peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
+    if (otherPos == NULL || otherPos->id == 0) {
+      DEBUG_PRINT("otherPos->id: %d\n", otherPos->id);
+      continue;
     }
-
-    for (int i = 0; i < NUM_IDS; i++) {
-      int cfid = cf_ids[i];
-      if (cfid == -1) {
-        continue;
-      }
-      float dt = (pos_neighbors_curr[cfid].timestamp - pos_neighbors_prev[cfid].timestamp) / 1000.0; // dt in seconds
-      deltaPoses[i][0] = pos_neighbors_curr[cfid].x - pos_neighbors_prev[cfid].x;
-      deltaPoses[i][1] = pos_neighbors_curr[cfid].y - pos_neighbors_prev[cfid].y;
-      deltaPoses[i][2] = pos_neighbors_curr[cfid].z - pos_neighbors_prev[cfid].z;
-
-      // get the relative positions
-      pos_neighbors_rel[i][0] -= state_array[0];
-      pos_neighbors_rel[i][1] -= state_array[1];
-      pos_neighbors_rel[i][2] -= state_array[2];
-
-      // update the velocity estimate
-      vel_neighbors_rel[i][0] = (deltaPoses[i][0] / dt) - state_array[3];
-      vel_neighbors_rel[i][1] = (deltaPoses[i][1] / dt) - state_array[4];
-      vel_neighbors_rel[i][2] = (deltaPoses[i][2] / dt) - state_array[5];
-
-      if (relXYZ) {
-        // rotate neighbor pos and vel. Untested
-        struct vec rot_neighbor_pos = mvmul(mtranspose(rot),
-                                            mkvec(pos_neighbors_rel[i][0], pos_neighbors_rel[i][1], pos_neighbors_rel[i][2]));
-        struct vec rot_neighbor_vel = mvmul(mtranspose(rot),
-                                            mkvec(vel_neighbors_rel[i][0], vel_neighbors_rel[i][1], vel_neighbors_rel[i][2]));
-        pos_neighbors_rel[i][0] = rot_neighbor_pos.x;
-        pos_neighbors_rel[i][1] = rot_neighbor_pos.y;
-        pos_neighbors_rel[i][2] = rot_neighbor_pos.z;
-
-        vel_neighbors_rel[i][0] = rot_neighbor_vel.x;
-        vel_neighbors_rel[i][1] = rot_neighbor_vel.y;
-        vel_neighbors_rel[i][2] = rot_neighbor_vel.z;
-      }
-
-      pos_neighbors_prev[cfid] = pos_neighbors_curr[cfid];
-
-      // update the neighbor obs
-      neighbors_state_array[i][0] = pos_neighbors_rel[i][0];
-      neighbors_state_array[i][1] = pos_neighbors_rel[i][1];
-      neighbors_state_array[i][2] = pos_neighbors_rel[i][2];
-      neighbors_state_array[i][3] = vel_neighbors_rel[i][0];
-      neighbors_state_array[i][4] = vel_neighbors_rel[i][1];
-      neighbors_state_array[i][5] = vel_neighbors_rel[i][2];
-
-      // update embedding for neighbor obs
-//      neighborEmbeddings(neighbors_state_array);
+    DEBUG_PRINT("TS: %f\n", time - otherPos->pos.timestamp);
+    if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) { // stale pos info
+      DEBUG_PRINT("doAgeFilter: %d\n", doAgeFilter);
+      continue;
     }
-	}
-  time_prev = time;
+    DEBUG_PRINT("Got neighbor obs from vicon\n");
+    pos_neighbors_curr[(int)otherPos->id][0] = otherPos->pos.x;
+    pos_neighbors_curr[(int)otherPos->id][1] = otherPos->pos.y;
+    pos_neighbors_curr[(int)otherPos->id][2] = otherPos->pos.z;
+    pos_neighbors_curr[(int)otherPos->id][3] = otherPos->pos.timestamp;
+    cf_ids[(int)otherPos->id] = (int)otherPos->id;
+
+    DEBUG_PRINT('x: %f', pos_neighbors_curr[(int)otherPos->id][0]);
+    DEBUG_PRINT('ts: %f\n', pos_neighbors_curr[(int)otherPos->id][3]);
+  }
+
+
+//	if (os_dt > 100) { // update pos/vel every 100ms
+//	  DEBUG_PRINT("Starting neighbor embeddings...\n");
+//
+//
+//    int n_row = 0;
+//    for (int j = 0; j < NUM_IDS; j++) {
+//      DEBUG_PRINT("cf_ids[%d] = %d\n",j,cf_ids[j]);
+//      if (cf_ids[j] == 0) {
+//        continue;
+//      }
+//      dt = (pos_neighbors_curr[j][3] - pos_neighbors_prev[j][3]) / 1000.0; // dt in seconds
+//      DEBUG_PRINT("dt: %f\n", dt);
+////      DEBUG_PRINT("New timestamp: %f, old timestamp: %f\n", pos_neighbors_curr[j].timestamp, pos_neighbors_prev[j].timestamp);
+//      deltaPoses[j][0] = pos_neighbors_curr[j][0] - pos_neighbors_prev[j][0];
+//      deltaPoses[j][1] = pos_neighbors_curr[j][1] - pos_neighbors_prev[j][1];
+//      deltaPoses[j][2] = pos_neighbors_curr[j][2] - pos_neighbors_prev[j][2];
+//
+//      // get the relative positions
+//      pos_neighbors_rel[j][0] = pos_neighbors_curr[j][0] - state_array[0];
+//      pos_neighbors_rel[j][1] = pos_neighbors_curr[j][1] - state_array[1];
+//      pos_neighbors_rel[j][2] = pos_neighbors_curr[j][2] - state_array[2];
+//
+//      if (dt != 0) {
+//        // update the velocity estimate
+//        vel_neighbors_rel[j][0] = (deltaPoses[j][0] / dt) - state_array[3];
+//        vel_neighbors_rel[j][1] = (deltaPoses[j][1] / dt) - state_array[4];
+//        vel_neighbors_rel[j][2] = (deltaPoses[j][2] / dt) - state_array[5];
+//      }
+//
+//      if (relXYZ) {
+//        // rotate neighbor pos and vel. Untested
+//        struct vec rot_neighbor_pos = mvmul(mtranspose(rot),
+//                                            mkvec(pos_neighbors_rel[j][0], pos_neighbors_rel[j][1], pos_neighbors_rel[j][2]));
+//        struct vec rot_neighbor_vel = mvmul(mtranspose(rot),
+//                                            mkvec(vel_neighbors_rel[j][0], vel_neighbors_rel[j][1], vel_neighbors_rel[j][2]));
+//        pos_neighbors_rel[j][0] = rot_neighbor_pos.x;
+//        pos_neighbors_rel[j][1] = rot_neighbor_pos.y;
+//        pos_neighbors_rel[j][2] = rot_neighbor_pos.z;
+//
+//        vel_neighbors_rel[j][0] = rot_neighbor_vel.x;
+//        vel_neighbors_rel[j][1] = rot_neighbor_vel.y;
+//        vel_neighbors_rel[j][2] = rot_neighbor_vel.z;
+//      }
+//
+//      pos_neighbors_prev[j][0] = pos_neighbors_curr[j][0];
+//      pos_neighbors_prev[j][1] = pos_neighbors_curr[j][1];
+//      pos_neighbors_prev[j][2] = pos_neighbors_curr[j][2];
+//      pos_neighbors_prev[j][3] = pos_neighbors_curr[j][3];
+//
+//      // update the neighbor obs
+////      neighbors_state_array[n_row][0] = pos_neighbors_rel[j][0];
+////      neighbors_state_array[n_row][1] = pos_neighbors_rel[j][1];
+////      neighbors_state_array[n_row][2] = pos_neighbors_rel[j][2];
+////      neighbors_state_array[n_row][3] = vel_neighbors_rel[j][0];
+////      neighbors_state_array[n_row][4] = vel_neighbors_rel[j][1];
+////      neighbors_state_array[n_row][5] = vel_neighbors_rel[j][2];
+////      n_row++;
+//
+//      // update embedding for neighbor obs
+////      neighborEmbeddings(neighbors_state_array);
+//    }
+//    time_prev = time;
+//	}
+
 
 	// run the neural neural network
 	uint64_t start = usecTimestamp();
@@ -344,5 +374,6 @@ LOG_ADD(LOG_FLOAT, nVel1, &neighbors_state_array[0][4])
 LOG_ADD(LOG_FLOAT, nVel2, &neighbors_state_array[0][5])
 
 LOG_ADD(LOG_UINT32, usec_eval, &usec_eval)
+LOG_ADD(LOG_FLOAT, dt, &os_dt)
 
 LOG_GROUP_STOP(ctrlNN)
