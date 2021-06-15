@@ -43,9 +43,9 @@ static float deltaPoses[NUM_IDS][3];
 static float pos_neighbors_rel[NUM_IDS][3] = {0};
 static float vel_neighbors_rel[NUM_IDS][3] = {0};
 static float neighbors_state_array[NEIGHBORS][6] = {0};
+static int cfid; // cfid of some neighbor to use as a timer
+static float update_dt;
 static float dt = 1.0;
-static TickType_t os_dt;
-static TickType_t time_prev = 0.0;
 static float maxPeerLocAgeMillis = 2000;
 
 static uint32_t usec_eval;
@@ -85,10 +85,10 @@ float clip(float v, float min, float max) {
 }
 
 
-void controllerNN(control_t *control, 
-				  setpoint_t *setpoint, 
-				  const sensorData_t *sensors, 
-				  const state_t *state, 
+void controllerNN(control_t *control,
+				  setpoint_t *setpoint,
+				  const sensorData_t *sensors,
+				  const state_t *state,
 				  const uint32_t tick)
 {
 	control->enableDirectThrust = true;
@@ -97,9 +97,9 @@ void controllerNN(control_t *control,
 	}
 
 	// Orientation
-	struct quat q = mkquat(state->attitudeQuaternion.x, 
-						   state->attitudeQuaternion.y, 
-						   state->attitudeQuaternion.z, 
+	struct quat q = mkquat(state->attitudeQuaternion.x,
+						   state->attitudeQuaternion.y,
+						   state->attitudeQuaternion.z,
 						   state->attitudeQuaternion.w);
 	rot = quat2rotmat(q);
 
@@ -145,7 +145,7 @@ void controllerNN(control_t *control,
 		state_array[3] = rot_vel.x;
 		state_array[4] = rot_vel.y;
 		state_array[5] = rot_vel.z;
-	}	
+	}
 
 	if (relOmega) {
 		state_array[15] = omega_roll - radians(setpoint->attitudeRate.roll);
@@ -163,97 +163,103 @@ void controllerNN(control_t *control,
 
 	//get neighbor pos/vel data and update at 10hz
   TickType_t const time = xTaskGetTickCount();
-	os_dt = time - time_prev; // internal dt
 
-	DEBUG_PRINT("Getting neighbor obs from vicon\n");
   bool doAgeFilter = maxPeerLocAgeMillis >= 0;
+
   for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
 
     peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
     if (otherPos == NULL || otherPos->id == 0) {
-      DEBUG_PRINT("otherPos->id: %d\n", otherPos->id);
       continue;
     }
-    DEBUG_PRINT("TS: %f\n", time - otherPos->pos.timestamp);
-    if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) { // stale pos info
-      DEBUG_PRINT("doAgeFilter: %d\n", doAgeFilter);
+
+    if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
       continue;
     }
-    DEBUG_PRINT("Got neighbor obs from vicon\n");
+
+    DEBUG_PRINT("x: %f\n", otherPos->pos.x);
     pos_neighbors_curr[(int)otherPos->id][0] = otherPos->pos.x;
     pos_neighbors_curr[(int)otherPos->id][1] = otherPos->pos.y;
     pos_neighbors_curr[(int)otherPos->id][2] = otherPos->pos.z;
     pos_neighbors_curr[(int)otherPos->id][3] = otherPos->pos.timestamp;
     cf_ids[(int)otherPos->id] = (int)otherPos->id;
+  }
 
-    DEBUG_PRINT('x: %f', pos_neighbors_curr[(int)otherPos->id][0]);
-    DEBUG_PRINT('ts: %f\n', pos_neighbors_curr[(int)otherPos->id][3]);
+  if (cfid == 0) {
+    // search for a cfid to make as our time-keeping neighbor
+    for (int i = 0; i < NUM_IDS; i++) {
+      if (cf_ids[i] != 0) {
+        cfid = cf_ids[i];
+        update_dt = pos_neighbors_curr[cfid][3] - pos_neighbors_prev[cfid][3];
+      }
+    }
+  }else {
+    update_dt = pos_neighbors_curr[cfid][3] - pos_neighbors_prev[cfid][3];
   }
 
 
-//	if (os_dt > 100) { // update pos/vel every 100ms
-//	  DEBUG_PRINT("Starting neighbor embeddings...\n");
-//
-//
-//    int n_row = 0;
-//    for (int j = 0; j < NUM_IDS; j++) {
-//      DEBUG_PRINT("cf_ids[%d] = %d\n",j,cf_ids[j]);
-//      if (cf_ids[j] == 0) {
-//        continue;
-//      }
-//      dt = (pos_neighbors_curr[j][3] - pos_neighbors_prev[j][3]) / 1000.0; // dt in seconds
-//      DEBUG_PRINT("dt: %f\n", dt);
-////      DEBUG_PRINT("New timestamp: %f, old timestamp: %f\n", pos_neighbors_curr[j].timestamp, pos_neighbors_prev[j].timestamp);
-//      deltaPoses[j][0] = pos_neighbors_curr[j][0] - pos_neighbors_prev[j][0];
-//      deltaPoses[j][1] = pos_neighbors_curr[j][1] - pos_neighbors_prev[j][1];
-//      deltaPoses[j][2] = pos_neighbors_curr[j][2] - pos_neighbors_prev[j][2];
-//
-//      // get the relative positions
-//      pos_neighbors_rel[j][0] = pos_neighbors_curr[j][0] - state_array[0];
-//      pos_neighbors_rel[j][1] = pos_neighbors_curr[j][1] - state_array[1];
-//      pos_neighbors_rel[j][2] = pos_neighbors_curr[j][2] - state_array[2];
-//
-//      if (dt != 0) {
-//        // update the velocity estimate
-//        vel_neighbors_rel[j][0] = (deltaPoses[j][0] / dt) - state_array[3];
-//        vel_neighbors_rel[j][1] = (deltaPoses[j][1] / dt) - state_array[4];
-//        vel_neighbors_rel[j][2] = (deltaPoses[j][2] / dt) - state_array[5];
-//      }
-//
-//      if (relXYZ) {
-//        // rotate neighbor pos and vel. Untested
-//        struct vec rot_neighbor_pos = mvmul(mtranspose(rot),
-//                                            mkvec(pos_neighbors_rel[j][0], pos_neighbors_rel[j][1], pos_neighbors_rel[j][2]));
-//        struct vec rot_neighbor_vel = mvmul(mtranspose(rot),
-//                                            mkvec(vel_neighbors_rel[j][0], vel_neighbors_rel[j][1], vel_neighbors_rel[j][2]));
-//        pos_neighbors_rel[j][0] = rot_neighbor_pos.x;
-//        pos_neighbors_rel[j][1] = rot_neighbor_pos.y;
-//        pos_neighbors_rel[j][2] = rot_neighbor_pos.z;
-//
-//        vel_neighbors_rel[j][0] = rot_neighbor_vel.x;
-//        vel_neighbors_rel[j][1] = rot_neighbor_vel.y;
-//        vel_neighbors_rel[j][2] = rot_neighbor_vel.z;
-//      }
-//
-//      pos_neighbors_prev[j][0] = pos_neighbors_curr[j][0];
-//      pos_neighbors_prev[j][1] = pos_neighbors_curr[j][1];
-//      pos_neighbors_prev[j][2] = pos_neighbors_curr[j][2];
-//      pos_neighbors_prev[j][3] = pos_neighbors_curr[j][3];
-//
-//      // update the neighbor obs
-////      neighbors_state_array[n_row][0] = pos_neighbors_rel[j][0];
-////      neighbors_state_array[n_row][1] = pos_neighbors_rel[j][1];
-////      neighbors_state_array[n_row][2] = pos_neighbors_rel[j][2];
-////      neighbors_state_array[n_row][3] = vel_neighbors_rel[j][0];
-////      neighbors_state_array[n_row][4] = vel_neighbors_rel[j][1];
-////      neighbors_state_array[n_row][5] = vel_neighbors_rel[j][2];
-////      n_row++;
-//
-//      // update embedding for neighbor obs
-////      neighborEmbeddings(neighbors_state_array);
-//    }
-//    time_prev = time;
-//	}
+  DEBUG_PRINT("Update dt: %f", update_dt);
+
+	if (update_dt > 100) { // update pos/vel every 100ms
+
+    int n_row = 0;
+    for (int j = 0; j < NUM_IDS; j++) {
+      DEBUG_PRINT("cf_ids[%d] = %d\n",j,cf_ids[j]);
+      if (cf_ids[j] == 0) {
+        continue;
+      }
+      dt = (pos_neighbors_curr[j][3] - pos_neighbors_prev[j][3]) / 1000.0; // dt in seconds
+      DEBUG_PRINT("dt: %f\n", dt);
+//      DEBUG_PRINT("New timestamp: %f, old timestamp: %f\n", pos_neighbors_curr[j].timestamp, pos_neighbors_prev[j].timestamp);
+      deltaPoses[j][0] = pos_neighbors_curr[j][0] - pos_neighbors_prev[j][0];
+      deltaPoses[j][1] = pos_neighbors_curr[j][1] - pos_neighbors_prev[j][1];
+      deltaPoses[j][2] = pos_neighbors_curr[j][2] - pos_neighbors_prev[j][2];
+
+      // get the relative positions
+      pos_neighbors_rel[j][0] = pos_neighbors_curr[j][0] - state_array[0];
+      pos_neighbors_rel[j][1] = pos_neighbors_curr[j][1] - state_array[1];
+      pos_neighbors_rel[j][2] = pos_neighbors_curr[j][2] - state_array[2];
+
+      if (dt != 0) {
+        // update the velocity estimate
+        vel_neighbors_rel[j][0] = (deltaPoses[j][0] / dt) - state_array[3];
+        vel_neighbors_rel[j][1] = (deltaPoses[j][1] / dt) - state_array[4];
+        vel_neighbors_rel[j][2] = (deltaPoses[j][2] / dt) - state_array[5];
+      }
+
+      if (relXYZ) {
+        // rotate neighbor pos and vel. Untested
+        struct vec rot_neighbor_pos = mvmul(mtranspose(rot),
+                                            mkvec(pos_neighbors_rel[j][0], pos_neighbors_rel[j][1], pos_neighbors_rel[j][2]));
+        struct vec rot_neighbor_vel = mvmul(mtranspose(rot),
+                                            mkvec(vel_neighbors_rel[j][0], vel_neighbors_rel[j][1], vel_neighbors_rel[j][2]));
+        pos_neighbors_rel[j][0] = rot_neighbor_pos.x;
+        pos_neighbors_rel[j][1] = rot_neighbor_pos.y;
+        pos_neighbors_rel[j][2] = rot_neighbor_pos.z;
+
+        vel_neighbors_rel[j][0] = rot_neighbor_vel.x;
+        vel_neighbors_rel[j][1] = rot_neighbor_vel.y;
+        vel_neighbors_rel[j][2] = rot_neighbor_vel.z;
+      }
+
+      pos_neighbors_prev[j][0] = pos_neighbors_curr[j][0];
+      pos_neighbors_prev[j][1] = pos_neighbors_curr[j][1];
+      pos_neighbors_prev[j][2] = pos_neighbors_curr[j][2];
+      pos_neighbors_prev[j][3] = pos_neighbors_curr[j][3];
+
+      // update the neighbor obs
+      neighbors_state_array[n_row][0] = pos_neighbors_rel[j][0];
+      neighbors_state_array[n_row][1] = pos_neighbors_rel[j][1];
+      neighbors_state_array[n_row][2] = pos_neighbors_rel[j][2];
+      neighbors_state_array[n_row][3] = vel_neighbors_rel[j][0];
+      neighbors_state_array[n_row][4] = vel_neighbors_rel[j][1];
+      neighbors_state_array[n_row][5] = vel_neighbors_rel[j][2];
+      n_row++;
+
+//       update embedding for neighbor obs
+      neighborEmbeddings(neighbors_state_array);
+    }
+	}
 
 
 	// run the neural neural network
@@ -264,7 +270,7 @@ void controllerNN(control_t *control,
 
 	// convert thrusts to directly to PWM
 	// need to hack the firmware (stablizer.c and power_distribution_stock.c)
-	int PWM_0, PWM_1, PWM_2, PWM_3; 
+	int PWM_0, PWM_1, PWM_2, PWM_3;
 	thrusts2PWM(&control_n, &PWM_0, &PWM_1, &PWM_2, &PWM_3);
 
 	if (setpoint->mode.z == modeDisable) {
@@ -281,7 +287,7 @@ void controllerNN(control_t *control,
 }
 
 
-void thrusts2PWM(control_t_n *control_n, 
+void thrusts2PWM(control_t_n *control_n,
 	int *PWM_0, int *PWM_1, int *PWM_2, int *PWM_3){
 
 	#if 0
@@ -297,7 +303,7 @@ void thrusts2PWM(control_t_n *control_n,
 	*PWM_1 = (int)((-B + sqrtf(B * B - 4 * A * (C - control_n->thrust_1))) / (2 * A));
 	// motor 2
 	*PWM_2 = (int)((-B + sqrtf(B * B - 4 * A * (C - control_n->thrust_2))) / (2 * A));
-	// motor 3 
+	// motor 3
 	*PWM_3 = (int)((-B + sqrtf(B * B - 4 * A * (C - control_n->thrust_3))) / (2 * A));
 	#else
 
@@ -311,7 +317,7 @@ void thrusts2PWM(control_t_n *control_n,
 		// *PWM_1 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_1), 0.0, 1.0));
 		// // motor
 		// *PWM_2 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_2), 0.0, 1.0));
-		// // motor 3 
+		// // motor 3
 		// *PWM_3 = maxThrustFactor * UINT16_MAX * sqrtf(clip(scale(control_n->thrust_3), 0.0, 1.0));
 
 		// motor 0
@@ -320,7 +326,7 @@ void thrusts2PWM(control_t_n *control_n,
 		*PWM_1 = maxThrustFactor * UINT16_MAX * clip(scale(control_n->thrust_1), 0.0, 1.0);
 		// motor
 		*PWM_2 = maxThrustFactor * UINT16_MAX * clip(scale(control_n->thrust_2), 0.0, 1.0);
-		// motor 3 
+		// motor 3
 		*PWM_3 = maxThrustFactor * UINT16_MAX * clip(scale(control_n->thrust_3), 0.0, 1.0);
 
 	} else {
@@ -331,7 +337,7 @@ void thrusts2PWM(control_t_n *control_n,
 		*PWM_1 = 1.0f * UINT16_MAX * clip(scale(control_n->thrust_1), 0.0, 1.0);
 		// motor
 		*PWM_2 = 1.0f * UINT16_MAX * clip(scale(control_n->thrust_2), 0.0, 1.0);
-		// motor 3 
+		// motor 3
 		*PWM_3 = 1.0f * UINT16_MAX * clip(scale(control_n->thrust_3), 0.0, 1.0);
 	}
 
@@ -374,6 +380,5 @@ LOG_ADD(LOG_FLOAT, nVel1, &neighbors_state_array[0][4])
 LOG_ADD(LOG_FLOAT, nVel2, &neighbors_state_array[0][5])
 
 LOG_ADD(LOG_UINT32, usec_eval, &usec_eval)
-LOG_ADD(LOG_FLOAT, dt, &os_dt)
 
 LOG_GROUP_STOP(ctrlNN)
