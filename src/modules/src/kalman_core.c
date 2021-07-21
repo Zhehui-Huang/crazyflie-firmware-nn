@@ -783,8 +783,8 @@ void kalmanCorePredict(kalmanCoreData_t* this, float cmdThrust, Axis3f *acc, Axi
     // TODO: In the next lines, can either use cmdThrust/mass, or acc->z. Need to test which is more reliable.
     // cmdThrust's error comes from poorly calibrated mass, and inexact cmdThrust -> thrust map
     // acc->z's error comes from measurement noise and accelerometer scaling
-    // float zacc = cmdThrust;
-    zacc = acc->z;
+     float zacc = cmdThrust;
+//    zacc = acc->z;
 
     // position updates in the body frame (will be rotated to inertial frame)
     dx = this->S[KC_STATE_PX] * dt;

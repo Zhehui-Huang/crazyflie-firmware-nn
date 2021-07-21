@@ -10,7 +10,7 @@
 #include "usec_time.h"
 #include "peer_localization.h"
 #include "debug.h"
-
+#include <stdbool.h>
 
 #define MAX_THRUST 0.15f
 // PWM to thrust coefficients
@@ -42,13 +42,19 @@ static int cf_ids[NUM_IDS] = {0};
 static float deltaPoses[NUM_IDS][3];
 static float pos_neighbors_rel[NUM_IDS][3] = {0};
 static float vel_neighbors_rel[NUM_IDS][3] = {0};
+static float vel_neighbors_prev[NUM_IDS][3] = {0};
 static float neighbors_state_array[NEIGHBORS][6] = {0};
+static float pos_raw[3];
 static int cfid; // cfid of some neighbor to use as a timer
 static float update_dt;
 static float dt = 1.0;
 static float maxPeerLocAgeMillis = 2000;
+static const float weight = 0.7; // weight param for exponential filter
 
 static uint32_t usec_eval;
+int ts = 0;
+bool reuse = false;
+
 
 void controllerNNInit(void) {
 	control_n.thrust_0 = 0.0f;
@@ -84,6 +90,12 @@ float clip(float v, float min, float max) {
 	return v;
 }
 
+float exponentialFilter(float x, float y_prev, float w) {
+  // x = current data point, y_prev = smoothed data point from previous timestep
+  // w = weight parameter, 0 <= w <= 1
+  return w * x + (1-w) * y_prev;
+}
+
 
 void controllerNN(control_t *control,
 				  setpoint_t *setpoint,
@@ -95,6 +107,13 @@ void controllerNN(control_t *control,
 	if (!RATE_DO_EXECUTE(/*RATE_100_HZ*/freq, tick)) {
 		return;
 	}
+
+	if (ts % 5 == 0) { //controller runs at 500hz, but vicon updates at 100hz
+    reuse = true;
+  }else {
+    reuse = false;
+  }
+	ts++;
 
 	// Orientation
 	struct quat q = mkquat(state->attitudeQuaternion.x,
@@ -114,6 +133,9 @@ void controllerNN(control_t *control,
 	state_array[0] = state->position.x - setpoint->position.x;
 	state_array[1] = state->position.y - setpoint->position.y;
 	state_array[2] = state->position.z - setpoint->position.z;
+	pos_raw[0] = state->position.x;
+	pos_raw[1] = state->position.y;
+	pos_raw[2] = state->position.z;
 	if (relVel) {
 		state_array[3] = state->velocity.x - setpoint->velocity.x;
 		state_array[4] = state->velocity.y - setpoint->velocity.y;
@@ -177,10 +199,10 @@ void controllerNN(control_t *control,
       continue;
     }
 
-    DEBUG_PRINT("x: %f\n", otherPos->pos.x);
-    pos_neighbors_curr[(int)otherPos->id][0] = otherPos->pos.x;
-    pos_neighbors_curr[(int)otherPos->id][1] = otherPos->pos.y;
-    pos_neighbors_curr[(int)otherPos->id][2] = otherPos->pos.z;
+//    DEBUG_PRINT("x: %f\n", otherPos->pos.x);
+    pos_neighbors_curr[(int)otherPos->id][0] = exponentialFilter(otherPos->pos.x, pos_neighbors_prev[otherPos->id][0], weight);
+    pos_neighbors_curr[(int)otherPos->id][1] = exponentialFilter(otherPos->pos.y, pos_neighbors_prev[otherPos->id][1], weight);
+    pos_neighbors_curr[(int)otherPos->id][2] = exponentialFilter(otherPos->pos.z, pos_neighbors_prev[otherPos->id][2], weight);
     pos_neighbors_curr[(int)otherPos->id][3] = otherPos->pos.timestamp;
     cf_ids[(int)otherPos->id] = (int)otherPos->id;
   }
@@ -198,18 +220,18 @@ void controllerNN(control_t *control,
   }
 
 
-  DEBUG_PRINT("Update dt: %f", update_dt);
+//  DEBUG_PRINT("Update dt: %f\n", update_dt);
 
-	if (update_dt > 100) { // update pos/vel every 100ms
+	if (true) { // update pos/vel every 2ms
 
     int n_row = 0;
     for (int j = 0; j < NUM_IDS; j++) {
-      DEBUG_PRINT("cf_ids[%d] = %d\n",j,cf_ids[j]);
+//      DEBUG_PRINT("cf_ids[%d] = %d\n",j,cf_ids[j]);
       if (cf_ids[j] == 0) {
         continue;
       }
       dt = (pos_neighbors_curr[j][3] - pos_neighbors_prev[j][3]) / 1000.0; // dt in seconds
-      DEBUG_PRINT("dt: %f\n", dt);
+//      DEBUG_PRINT("dt: %f\n", dt);
 //      DEBUG_PRINT("New timestamp: %f, old timestamp: %f\n", pos_neighbors_curr[j].timestamp, pos_neighbors_prev[j].timestamp);
       deltaPoses[j][0] = pos_neighbors_curr[j][0] - pos_neighbors_prev[j][0];
       deltaPoses[j][1] = pos_neighbors_curr[j][1] - pos_neighbors_prev[j][1];
@@ -220,12 +242,16 @@ void controllerNN(control_t *control,
       pos_neighbors_rel[j][1] = pos_neighbors_curr[j][1] - state_array[1];
       pos_neighbors_rel[j][2] = pos_neighbors_curr[j][2] - state_array[2];
 
-      if (dt != 0) {
-        // update the velocity estimate
-        vel_neighbors_rel[j][0] = (deltaPoses[j][0] / dt) - state_array[3];
-        vel_neighbors_rel[j][1] = (deltaPoses[j][1] / dt) - state_array[4];
-        vel_neighbors_rel[j][2] = (deltaPoses[j][2] / dt) - state_array[5];
-      }
+//      if (dt != 0) {
+//        // update the velocity estimate
+//        float vx = (deltaPoses[j][0] / dt) - state_array[3];
+//        float vy = (deltaPoses[j][1] / dt) - state_array[4];
+//        float vz = (deltaPoses[j][2] / dt) - state_array[5];
+//
+//        vel_neighbors_rel[j][0] = exponentialFilter(vx, vel_neighbors_prev[j][0], weight);
+//        vel_neighbors_rel[j][1] = exponentialFilter(vy, vel_neighbors_prev[j][1], weight);
+//        vel_neighbors_rel[j][2] = exponentialFilter(vz, vel_neighbors_prev[j][2], weight);
+//      }
 
       if (relXYZ) {
         // rotate neighbor pos and vel. Untested
@@ -247,24 +273,32 @@ void controllerNN(control_t *control,
       pos_neighbors_prev[j][2] = pos_neighbors_curr[j][2];
       pos_neighbors_prev[j][3] = pos_neighbors_curr[j][3];
 
+//      vel_neighbors_prev[j][0] = vel_neighbors_rel[j][0];
+//      vel_neighbors_prev[j][1] = vel_neighbors_rel[j][1];
+//      vel_neighbors_prev[j][2] = vel_neighbors_rel[j][2];
+
       // update the neighbor obs
       neighbors_state_array[n_row][0] = pos_neighbors_rel[j][0];
       neighbors_state_array[n_row][1] = pos_neighbors_rel[j][1];
       neighbors_state_array[n_row][2] = pos_neighbors_rel[j][2];
-      neighbors_state_array[n_row][3] = vel_neighbors_rel[j][0];
-      neighbors_state_array[n_row][4] = vel_neighbors_rel[j][1];
-      neighbors_state_array[n_row][5] = vel_neighbors_rel[j][2];
+//      neighbors_state_array[n_row][3] = vel_neighbors_rel[j][0];
+//      neighbors_state_array[n_row][4] = vel_neighbors_rel[j][1];
+//      neighbors_state_array[n_row][5] = vel_neighbors_rel[j][2];
       n_row++;
 
 //       update embedding for neighbor obs
-      neighborEmbeddings(neighbors_state_array);
+//      neighborEmbeddings(neighbors_state_array);
     }
 	}
+	if (!reuse) {
+    neighborEmbeddings(neighbors_state_array);
+  }
 
 
-	// run the neural neural network
+
+  // run the neural neural network
 	uint64_t start = usecTimestamp();
-    networkEvaluate(&control_n, state_array);
+    networkEvaluate(&control_n, state_array, reuse);
 //  networkEvaluate(&control_n, state_array, neighbors_state_array); // with neighbor obs
 	usec_eval = (uint32_t) (usecTimestamp() - start);
 
@@ -360,9 +394,9 @@ LOG_ADD(LOG_FLOAT, out1, &control_n.thrust_1)
 LOG_ADD(LOG_FLOAT, out2, &control_n.thrust_2)
 LOG_ADD(LOG_FLOAT, out3, &control_n.thrust_3)
 
-//LOG_ADD(LOG_FLOAT, in0, &state_array[0])
-//LOG_ADD(LOG_FLOAT, in1, &state_array[1])
-//LOG_ADD(LOG_FLOAT, in2, &state_array[2])
+LOG_ADD(LOG_FLOAT, posX, &pos_raw[0])
+LOG_ADD(LOG_FLOAT, posY, &pos_raw[1])
+LOG_ADD(LOG_FLOAT, posZ, &pos_raw[2])
 //
 //LOG_ADD(LOG_FLOAT, in3, &state_array[3])
 //LOG_ADD(LOG_FLOAT, in4, &state_array[4])
