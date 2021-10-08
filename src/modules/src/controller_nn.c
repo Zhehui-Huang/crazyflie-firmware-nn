@@ -49,11 +49,9 @@ static int cfid; // cfid of some neighbor to use as a timer
 static float update_dt;
 static float dt = 1.0;
 static float maxPeerLocAgeMillis = 2000;
-static const float weight = 0.7; // weight param for exponential filter
+static const float weight = 0.9; // weight param for exponential filter
 
 static uint32_t usec_eval;
-int ts = 0;
-bool reuse = false;
 
 
 void controllerNNInit(void) {
@@ -105,15 +103,11 @@ void controllerNN(control_t *control,
 {
 	control->enableDirectThrust = true;
 	if (!RATE_DO_EXECUTE(/*RATE_100_HZ*/freq, tick)) {
-		return;
+	  return;
 	}
 
-	if (ts % 5 == 0) { //controller runs at 500hz, but vicon updates at 100hz
-    reuse = true;
-  }else {
-    reuse = false;
-  }
-	ts++;
+
+//	DEBUG_PRINT("tick: %f\n", tick);
 
 	// Orientation
 	struct quat q = mkquat(state->attitudeQuaternion.x,
@@ -290,16 +284,15 @@ void controllerNN(control_t *control,
 //      neighborEmbeddings(neighbors_state_array);
     }
 	}
-	if (!reuse) {
-    neighborEmbeddings(neighbors_state_array);
-  }
+
+	neighborEmbeddings(neighbors_state_array);
+  //}
 
 
 
   // run the neural neural network
 	uint64_t start = usecTimestamp();
-    networkEvaluate(&control_n, state_array, reuse);
-//  networkEvaluate(&control_n, state_array, neighbors_state_array); // with neighbor obs
+	networkEvaluate(&control_n, state_array);
 	usec_eval = (uint32_t) (usecTimestamp() - start);
 
 	// convert thrusts to directly to PWM
@@ -405,7 +398,7 @@ LOG_ADD(LOG_FLOAT, posZ, &pos_raw[2])
 //LOG_ADD(LOG_FLOAT, in15, &state_array[15])
 //LOG_ADD(LOG_FLOAT, in16, &state_array[16])
 //LOG_ADD(LOG_FLOAT, in17, &state_array[17])
-// pos of whatever the first neighbor drone is
+// rel pos of whatever the first neighbor drone is
 LOG_ADD(LOG_FLOAT, nPos0, &neighbors_state_array[0][0])
 LOG_ADD(LOG_FLOAT, nPos1, &neighbors_state_array[0][1])
 LOG_ADD(LOG_FLOAT, nPos2, &neighbors_state_array[0][2])

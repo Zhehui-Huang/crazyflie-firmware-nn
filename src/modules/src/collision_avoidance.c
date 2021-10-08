@@ -266,7 +266,6 @@ void collisionAvoidanceUpdateSetpointCore(
 #include "param.h"
 #include "log.h"
 
-
 static uint8_t collisionAvoidanceEnable = 0;
 
 static collision_avoidance_params_t params = {

@@ -53,6 +53,7 @@
 #include "statsCnt.h"
 #include "static_mem.h"
 #include "rateSupervisor.h"
+#include "usec_time.h"
 
 static bool isInit;
 static bool emergencyStop = false;
@@ -88,6 +89,12 @@ typedef enum { configureAcc, measureNoiseFloor, measureProp, testBattery, restar
 static STATS_CNT_RATE_DEFINE(stabilizerRate, 500);
 static rateSupervisor_t rateSupervisorContext;
 static bool rateWarningDisplayed = false;
+
+//debugging vars
+static uint32_t ekf_start;
+static uint32_t ekf_end;
+static uint32_t ctrl_start;
+static uint32_t ctrl_end;
 
 static struct {
   // position - mm
@@ -286,7 +293,9 @@ static void stabilizerTask(void* param)
       }
 
       control.enableDirectThrust = false;
+      ekf_start = (uint32_t) usecTimestamp();
       stateEstimator(&state, &sensorData, &control, tick);
+      ekf_end = (uint32_t) usecTimestamp();
       compressState();
 
       commanderGetSetpoint(&setpoint, &state);
@@ -295,7 +304,9 @@ static void stabilizerTask(void* param)
       sitAwUpdateSetpoint(&setpoint, &sensorData, &state);
       collisionAvoidanceUpdateSetpoint(&setpoint, &sensorData, &state, tick);
 
+      ctrl_start = (uint32_t) usecTimestamp();
       controller(&control, &setpoint, &sensorData, &state, tick);
+      ctrl_end = (uint32_t) usecTimestamp();
 
       scaled_roll_ctrl = control.roll / 1000;
       scaled_pitch_ctrl = control.pitch / 1000;
@@ -657,6 +668,13 @@ LOG_ADD(LOG_FLOAT, x, &sensorData.mag.x)
 LOG_ADD(LOG_FLOAT, y, &sensorData.mag.y)
 LOG_ADD(LOG_FLOAT, z, &sensorData.mag.z)
 LOG_GROUP_STOP(mag)
+
+LOG_GROUP_START(timers)
+LOG_ADD(LOG_UINT32, ekf_start, &ekf_start)
+LOG_ADD(LOG_UINT32, ekf_end, &ekf_end)
+LOG_ADD(LOG_UINT32, ctrl_start, &ctrl_start)
+LOG_ADD(LOG_UINT32, ctrl_end, &ctrl_end)
+LOG_GROUP_STOP(timers)
 
 LOG_GROUP_START(controller)
 LOG_ADD(LOG_INT16, ctr_yaw, &control.yaw)

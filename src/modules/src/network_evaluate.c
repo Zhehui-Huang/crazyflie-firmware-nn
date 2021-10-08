@@ -1,17 +1,17 @@
 #include "network_evaluate.h"
 #include "debug.h"
 #include "param.h"
-#include <string.h>
-
+//#include <string.h>
+//
 //#include <math.h>
 //#include <random>
 //#include <vector>
 //#include <iostream>
 //#include <algorithm>
 //
-//#define NEIGHBORS 2
+//#define NEIGHBORS 1
 //#define NUM_OBS 6
-//
+
 ///*
 // * since the network outputs thrust on each motor,
 // * we need to define a struct which stores the values
@@ -48,10 +48,10 @@ float relu(float num) {
 
 //static const int structure [6][2] = {{18, 36},{16, 16},{6, 8},{8, 8},{24, 32},{32, 4}};
 static const int structure [6][2] = {{18, 16},{16, 16},{6, 8},{8, 8},{24, 32},{32, 4}};
-static float output_0[8];
+static float output_0[16];
 //static float output_1[8];
-static float output_2[16];
-static float output_3[16];
+static float output_2[8];
+static float output_3[8];
 static float output_4[32];
 static float output_5[4];
 static float neighbor_embeds[8];
@@ -68,7 +68,6 @@ static const float actor_encoder_self_encoder_0_bias[16] = {0.005192951764911413
 static const float actor_encoder_self_encoder_2_bias[16] = {-0.0022466813679784536,0.06923142075538635,-0.023931166157126427,0.14840658009052277,0.07961095124483109,0.04377143085002899,-0.12377187609672546,0.02649434469640255,-0.0019239492248743773,-0.048795316368341446,0.055985648185014725,-0.01022963598370552,0.049914661794900894,-0.015576966106891632,0.07679509371519089,-0.019424885511398315};
 static const float actor_encoder_feed_forward_0_bias[32] = {0.006060160230845213,-0.054643601179122925,-0.005478264763951302,-0.021991265937685966,-0.005022833589464426,-0.045761656016111374,-0.03796324133872986,0.03563584014773369,0.008179659955203533,0.015247358940541744,0.02303515560925007,-0.010922808200120926,0.014175789430737495,0.013168171048164368,-0.0019513106672093272,0.039778172969818115,-0.012396757490932941,0.0032947396393865347,-0.00922230165451765,0.011542638763785362,0.019734060391783714,-0.013597504235804081,-0.006004834547638893,0.04054674506187439,-0.01721222884953022,-0.033583734184503555,0.013888737186789513,-0.027983037754893303,0.017418434843420982,0.032746266573667526,-0.013813943602144718,0.0029301203321665525};
 static const float action_parameterization_distribution_linear_bias[4] = {0.014275819063186646,-0.004552863072603941,-0.011407431215047836,0.019291620701551437};
-
 void neighborEmbeddings(const float neighbors_array[NEIGHBORS][NUM_OBS]) {
   //reset embeddings accumulator to zero
   memset(neighbor_embeds, 0, sizeof(neighbor_embeds));
@@ -103,47 +102,44 @@ void neighborEmbeddings(const float neighbors_array[NEIGHBORS][NUM_OBS]) {
   }
 }
 
-void networkEvaluate(struct control_t_n *control_n, const float *state_array, bool reuse) {
-  if (!reuse) {
-    // first get the self embeddings
-    for (int i = 0; i < structure[0][1]; i++) {
-      output_0[i] = 0;
-      for (int j = 0; j < structure[0][0]; j++) {
-        output_0[i] += state_array[j] * actor_encoder_self_encoder_0_weight[j][i]; // add weights
-      }
-      output_0[i] += actor_encoder_self_encoder_0_bias[i]; // add bias
-      output_0[i] = tanhf(output_0[i]); // activation function
+void networkEvaluate(struct control_t_n *control_n, const float *state_array) {
+  // first get the self embeddings
+  for (int i = 0; i < structure[0][1]; i++) {
+    output_0[i] = 0;
+    for (int j = 0; j < structure[0][0]; j++) {
+      output_0[i] += state_array[j] * actor_encoder_self_encoder_0_weight[j][i]; // add weights
     }
-
-    for (int i = 0; i < structure[1][1]; i++) {
-      embedding_array[i] = 0;
-      for (int j = 0; j < structure[1][0]; j++) {
-        embedding_array[i] += output_0[j] * actor_encoder_self_encoder_2_weight[j][i];
-      }
-      embedding_array[i] += actor_encoder_self_encoder_2_bias[i];
-      embedding_array[i] = tanhf(embedding_array[i]);
-    }
-
-
-    // last layer(s)
-    for (int i = 0; i < structure[4][1]; i++) {
-      output_4[i] = 0;
-      for (int j = 0; j < structure[4][0]; j++) {
-        output_4[i] += embedding_array[j] * actor_encoder_feed_forward_0_weight[j][i];
-      }
-      output_4[i] += actor_encoder_feed_forward_0_bias[i];
-      output_4[i] = tanhf(output_4[i]);
-    }
-
-
-    for (int i = 0; i < structure[5][1]; i++) {
-      output_5[i] = 0;
-      for (int j = 0; j < structure[5][0]; j++) {
-        output_5[i] += output_4[j] * action_parameterization_distribution_linear_weight[j][i];
-      }
-      output_5[i] += action_parameterization_distribution_linear_bias[i];
-    }
+    output_0[i] += actor_encoder_self_encoder_0_bias[i]; // add bias
+    output_0[i] = tanhf(output_0[i]); // activation function
   }
+
+  for (int i = 0; i < structure[1][1]; i++) {
+    embedding_array[i] = 0;
+    for (int j = 0; j < structure[1][0]; j++) {
+      embedding_array[i] += output_0[j] * actor_encoder_self_encoder_2_weight[j][i];
+    }
+    embedding_array[i] += actor_encoder_self_encoder_2_bias[i];
+    embedding_array[i] = tanhf(embedding_array[i]);
+  }
+
+  // last layer(s)
+  for (int i = 0; i < structure[4][1]; i++) {
+    output_4[i] = 0;
+    for (int j = 0; j < structure[4][0]; j++) {
+      output_4[i] += embedding_array[j] * actor_encoder_feed_forward_0_weight[j][i];
+    }
+    output_4[i] += actor_encoder_feed_forward_0_bias[i];
+    output_4[i] = tanhf(output_4[i]);
+  }
+
+  for (int i = 0; i < structure[5][1]; i++) {
+    output_5[i] = 0;
+    for (int j = 0; j < structure[5][0]; j++) {
+      output_5[i] += output_4[j] * action_parameterization_distribution_linear_weight[j][i];
+    }
+    output_5[i] += action_parameterization_distribution_linear_bias[i];
+  }
+
 
   control_n->thrust_0 = output_5[0];
   control_n->thrust_1 = output_5[1];
@@ -179,10 +175,10 @@ void networkEvaluate(struct control_t_n *control_n, const float *state_array, bo
 //
 ////  float neighbor_obs[1][6] =
 //
-//  const float neighbor_obs[2][6] = {
-//          {1, 1, 1, -1, -1, -1}, // neighbor to my top right moving towards me
-//          { 0.13411005, -0.48878977, -2.10056613,  1.36485453, -0.72864023,
-//                            -1.82551435}
+//  const float neighbor_obs[1][6] = {
+//          {-1.0, -1.4, 0.0, 0, 0, 0},
+////          { 0.13411005, -0.48878977, -2.10056613,  1.36485453, -0.72864023,
+////                            -1.82551435}
 //  };
 //
 ////  const float neighbor_obs[1][6] = {
