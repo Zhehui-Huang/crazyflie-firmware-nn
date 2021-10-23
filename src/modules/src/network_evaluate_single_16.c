@@ -36,42 +36,40 @@ static const float actor_encoder_self_encoder_0_bias[16] = {0.08922560513019562,
 static const float actor_encoder_self_encoder_2_bias[16] = {0.09242542833089828,-0.044977810233831406,-0.0035249602515250444,-0.03536912426352501,0.09337242692708969,0.059492915868759155,0.0029120263643562794,-0.0042747193947434425,0.009309975430369377,0.0033489237539470196,0.02795884571969509,0.016082918271422386,-0.014558962546288967,0.08468414843082428,-0.08650051802396774,0.013838770799338818};
 static const float actor_encoder_feed_forward_0_bias[32] = {-0.02162300795316696,-0.016298718750476837,0.03876033425331116,-0.0037307050079107285,0.028663430362939835,0.03255467489361763,-0.002089503686875105,0.042615827172994614,0.05444338172674179,0.04194656386971474,-0.074164018034935,0.06312776356935501,-0.0014309578109532595,0.03364389389753342,0.027341419830918312,-0.020268026739358902,0.014923213049769402,0.018788814544677734,0.07367339730262756,0.006711797788739204,-0.02211969532072544,-0.045403458178043365,-0.03619915619492531,-0.02220235951244831,0.0003270489687565714,-0.001571482396684587,-0.0010477808536961675,-0.07957661151885986,0.01487173605710268,0.012336327694356441,-0.029597623273730278,-0.01850482076406479};
 static const float action_parameterization_distribution_linear_bias[4] = {-0.011118177324533463,-0.040501296520233154,-0.037264227867126465,-0.02342507801949978};
-void networkEvaluate(struct control_t_n *control_n, const float *state_array, bool reuse) {
-  if (!reuse) {
-    for (int i = 0; i < structure[0][1]; i++) {
-      output_0[i] = 0;
-      for (int j = 0; j < structure[0][0]; j++) {
-        output_0[i] += state_array[j] * actor_encoder_self_encoder_0_weight[j][i];
-      }
-      output_0[i] += actor_encoder_self_encoder_0_bias[i];
-      output_0[i] = tanhf(output_0[i]);
+void networkEvaluate(struct control_t_n *control_n, const float *state_array) {
+  for (int i = 0; i < structure[0][1]; i++) {
+    output_0[i] = 0;
+    for (int j = 0; j < structure[0][0]; j++) {
+      output_0[i] += state_array[j] * actor_encoder_self_encoder_0_weight[j][i];
     }
+    output_0[i] += actor_encoder_self_encoder_0_bias[i];
+    output_0[i] = tanhf(output_0[i]);
+  }
 
-    for (int i = 0; i < structure[1][1]; i++) {
-      output_1[i] = 0;
-      for (int j = 0; j < structure[1][0]; j++) {
-        output_1[i] += output_0[j] * actor_encoder_self_encoder_2_weight[j][i];
-      }
-      output_1[i] += actor_encoder_self_encoder_2_bias[i];
-      output_1[i] = tanhf(output_1[i]);
+  for (int i = 0; i < structure[1][1]; i++) {
+    output_1[i] = 0;
+    for (int j = 0; j < structure[1][0]; j++) {
+      output_1[i] += output_0[j] * actor_encoder_self_encoder_2_weight[j][i];
     }
+    output_1[i] += actor_encoder_self_encoder_2_bias[i];
+    output_1[i] = tanhf(output_1[i]);
+  }
 
-    for (int i = 0; i < structure[2][1]; i++) {
-      output_2[i] = 0;
-      for (int j = 0; j < structure[2][0]; j++) {
-        output_2[i] += output_1[j] * actor_encoder_feed_forward_0_weight[j][i];
-      }
-      output_2[i] += actor_encoder_feed_forward_0_bias[i];
-      output_2[i] = tanhf(output_2[i]);
+  for (int i = 0; i < structure[2][1]; i++) {
+    output_2[i] = 0;
+    for (int j = 0; j < structure[2][0]; j++) {
+      output_2[i] += output_1[j] * actor_encoder_feed_forward_0_weight[j][i];
     }
+    output_2[i] += actor_encoder_feed_forward_0_bias[i];
+    output_2[i] = tanhf(output_2[i]);
+  }
 
-    for (int i = 0; i < structure[3][1]; i++) {
-      output_3[i] = 0;
-      for (int j = 0; j < structure[3][0]; j++) {
-        output_3[i] += output_2[j] * action_parameterization_distribution_linear_weight[j][i];
-      }
-      output_3[i] += action_parameterization_distribution_linear_bias[i];
+  for (int i = 0; i < structure[3][1]; i++) {
+    output_3[i] = 0;
+    for (int j = 0; j < structure[3][0]; j++) {
+      output_3[i] += output_2[j] * action_parameterization_distribution_linear_weight[j][i];
     }
+    output_3[i] += action_parameterization_distribution_linear_bias[i];
   }
 
   control_n->thrust_0 = output_3[0];

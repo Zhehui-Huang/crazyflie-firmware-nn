@@ -46,10 +46,9 @@ static float vel_neighbors_prev[NUM_IDS][3] = {0};
 static float neighbors_state_array[NEIGHBORS][6] = {0};
 static float pos_raw[3];
 static int cfid; // cfid of some neighbor to use as a timer
-static float update_dt;
 static float dt = 1.0;
 static float maxPeerLocAgeMillis = 2000;
-static const float weight = 0.9; // weight param for exponential filter
+static const float weight = 0.95; // weight param for exponential filter
 
 static uint32_t usec_eval;
 
@@ -102,9 +101,9 @@ void controllerNN(control_t *control,
 				  const uint32_t tick)
 {
 	control->enableDirectThrust = true;
-	if (!RATE_DO_EXECUTE(/*RATE_100_HZ*/freq, tick)) {
-	  return;
-	}
+//	if (!RATE_DO_EXECUTE(/*RATE_100_HZ*/freq, tick)) {
+//	  return;
+//	}
 
 
 //	DEBUG_PRINT("tick: %f\n", tick);
@@ -194,27 +193,16 @@ void controllerNN(control_t *control,
     }
 
 //    DEBUG_PRINT("x: %f\n", otherPos->pos.x);
-    pos_neighbors_curr[(int)otherPos->id][0] = exponentialFilter(otherPos->pos.x, pos_neighbors_prev[otherPos->id][0], weight);
-    pos_neighbors_curr[(int)otherPos->id][1] = exponentialFilter(otherPos->pos.y, pos_neighbors_prev[otherPos->id][1], weight);
-    pos_neighbors_curr[(int)otherPos->id][2] = exponentialFilter(otherPos->pos.z, pos_neighbors_prev[otherPos->id][2], weight);
+      pos_neighbors_curr[(int)otherPos->id][0] = otherPos->pos.x;
+      pos_neighbors_curr[(int)otherPos->id][1] = otherPos->pos.y;
+      pos_neighbors_curr[(int)otherPos->id][2] = otherPos->pos.z;
+//    pos_neighbors_curr[(int)otherPos->id][0] = exponentialFilter(otherPos->pos.x, pos_neighbors_prev[otherPos->id][0], weight);
+//    pos_neighbors_curr[(int)otherPos->id][1] = exponentialFilter(otherPos->pos.y, pos_neighbors_prev[otherPos->id][1], weight);
+//    pos_neighbors_curr[(int)otherPos->id][2] = exponentialFilter(otherPos->pos.z, pos_neighbors_prev[otherPos->id][2], weight);
     pos_neighbors_curr[(int)otherPos->id][3] = otherPos->pos.timestamp;
     cf_ids[(int)otherPos->id] = (int)otherPos->id;
   }
 
-  if (cfid == 0) {
-    // search for a cfid to make as our time-keeping neighbor
-    for (int i = 0; i < NUM_IDS; i++) {
-      if (cf_ids[i] != 0) {
-        cfid = cf_ids[i];
-        update_dt = pos_neighbors_curr[cfid][3] - pos_neighbors_prev[cfid][3];
-      }
-    }
-  }else {
-    update_dt = pos_neighbors_curr[cfid][3] - pos_neighbors_prev[cfid][3];
-  }
-
-
-//  DEBUG_PRINT("Update dt: %f\n", update_dt);
 
 	if (true) { // update pos/vel every 2ms
 
@@ -236,16 +224,16 @@ void controllerNN(control_t *control,
       pos_neighbors_rel[j][1] = pos_neighbors_curr[j][1] - state_array[1];
       pos_neighbors_rel[j][2] = pos_neighbors_curr[j][2] - state_array[2];
 
-//      if (dt != 0) {
-//        // update the velocity estimate
-//        float vx = (deltaPoses[j][0] / dt) - state_array[3];
-//        float vy = (deltaPoses[j][1] / dt) - state_array[4];
-//        float vz = (deltaPoses[j][2] / dt) - state_array[5];
-//
-//        vel_neighbors_rel[j][0] = exponentialFilter(vx, vel_neighbors_prev[j][0], weight);
-//        vel_neighbors_rel[j][1] = exponentialFilter(vy, vel_neighbors_prev[j][1], weight);
-//        vel_neighbors_rel[j][2] = exponentialFilter(vz, vel_neighbors_prev[j][2], weight);
-//      }
+      if (dt != 0) {
+        // update the velocity estimate
+        float vx = (deltaPoses[j][0] / dt) - state_array[3];
+        float vy = (deltaPoses[j][1] / dt) - state_array[4];
+        float vz = (deltaPoses[j][2] / dt) - state_array[5];
+
+        vel_neighbors_rel[j][0] = exponentialFilter(vx, vel_neighbors_prev[j][0], weight);
+        vel_neighbors_rel[j][1] = exponentialFilter(vy, vel_neighbors_prev[j][1], weight);
+        vel_neighbors_rel[j][2] = exponentialFilter(vz, vel_neighbors_prev[j][2], weight);
+      }
 
       if (relXYZ) {
         // rotate neighbor pos and vel. Untested
@@ -267,21 +255,19 @@ void controllerNN(control_t *control,
       pos_neighbors_prev[j][2] = pos_neighbors_curr[j][2];
       pos_neighbors_prev[j][3] = pos_neighbors_curr[j][3];
 
-//      vel_neighbors_prev[j][0] = vel_neighbors_rel[j][0];
-//      vel_neighbors_prev[j][1] = vel_neighbors_rel[j][1];
-//      vel_neighbors_prev[j][2] = vel_neighbors_rel[j][2];
+      vel_neighbors_prev[j][0] = vel_neighbors_rel[j][0];
+      vel_neighbors_prev[j][1] = vel_neighbors_rel[j][1];
+      vel_neighbors_prev[j][2] = vel_neighbors_rel[j][2];
 
       // update the neighbor obs
       neighbors_state_array[n_row][0] = pos_neighbors_rel[j][0];
       neighbors_state_array[n_row][1] = pos_neighbors_rel[j][1];
       neighbors_state_array[n_row][2] = pos_neighbors_rel[j][2];
-//      neighbors_state_array[n_row][3] = vel_neighbors_rel[j][0];
-//      neighbors_state_array[n_row][4] = vel_neighbors_rel[j][1];
-//      neighbors_state_array[n_row][5] = vel_neighbors_rel[j][2];
+      neighbors_state_array[n_row][3] = vel_neighbors_rel[j][0];
+      neighbors_state_array[n_row][4] = vel_neighbors_rel[j][1];
+      neighbors_state_array[n_row][5] = vel_neighbors_rel[j][2];
       n_row++;
 
-//       update embedding for neighbor obs
-//      neighborEmbeddings(neighbors_state_array);
     }
 	}
 
@@ -390,6 +376,7 @@ LOG_ADD(LOG_FLOAT, out3, &control_n.thrust_3)
 LOG_ADD(LOG_FLOAT, posX, &pos_raw[0])
 LOG_ADD(LOG_FLOAT, posY, &pos_raw[1])
 LOG_ADD(LOG_FLOAT, posZ, &pos_raw[2])
+LOG_ADD(LOG_FLOAT, fposZ, &state_array[2])
 //
 //LOG_ADD(LOG_FLOAT, in3, &state_array[3])
 //LOG_ADD(LOG_FLOAT, in4, &state_array[4])
