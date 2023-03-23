@@ -29,7 +29,8 @@ static uint16_t freq = 500;
 
 static control_t_n control_n;
 static struct mat33 rot;
-static float state_array[18];
+//static float state_array[18]; // for the corl network
+static float state_array[24]; // for the obstacle avoiding policy
 // static float state_array[22];
 
 // vars related to neighbor drone(s)
@@ -49,8 +50,25 @@ static int cfid; // cfid of some neighbor to use as a timer
 static float dt = 1.0;
 static float maxPeerLocAgeMillis = 2000;
 static const float weight = 0.95; // weight param for exponential filter
+static uint16_t isStale = false;
+static int motor1;
+static int pwm0;
+
+static float log_posx, log_posy, log_posz;
+
+// hard code the obstacle positions for now
+static const float obstacle_obs[K_OBSTACLES][OBST_OBS_DIM] = {
+        {20.3,   20.3, 5e-7}, // x y z radius
+        {20.3,   20.3, 5e-7},
+};
+static float obstacle_state_array[K_OBSTACLES][OBST_OBS_DIM];
+static const float box_radius = 5.0; // half-width of the room box (from simulator)
+static const float min_wall_dist = 0.0;
+static const float max_wall_dist = 2.0;
+
 
 static uint32_t usec_eval;
+
 
 
 void controllerNNInit(void) {
@@ -171,10 +189,14 @@ void controllerNN(control_t *control,
 		state_array[16] = omega_pitch;
 		state_array[17] = omega_yaw;
 	}
-	// state_array[18] = control_n.thrust_0;
-	// state_array[19] = control_n.thrust_1;
-	// state_array[20] = control_n.thrust_2;
-	// state_array[21] = control_n.thrust_3;
+//  // distance to walls
+  state_array[18] = clip(state->position.x + box_radius, min_wall_dist, max_wall_dist);
+  state_array[19] = clip(state->position.y + box_radius, min_wall_dist, max_wall_dist);
+  state_array[20] = clip(state->position.z, min_wall_dist, max_wall_dist); // distance to floor
+  state_array[21] = clip(box_radius - state->position.x, min_wall_dist, max_wall_dist);
+  state_array[22] = clip(box_radius - state->position.y, min_wall_dist, max_wall_dist);
+  state_array[23] = clip((box_radius * 2.0) - state->position.z, min_wall_dist, max_wall_dist); // dist to ceiling
+
 
 	//get neighbor pos/vel data and update at 10hz
   TickType_t const time = xTaskGetTickCount();
@@ -189,7 +211,10 @@ void controllerNN(control_t *control,
     }
 
     if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
+      isStale = 1;
       continue;
+    }else {
+      isStale = 0;
     }
 
 //    DEBUG_PRINT("x: %f\n", otherPos->pos.x);
@@ -220,15 +245,15 @@ void controllerNN(control_t *control,
       deltaPoses[j][2] = pos_neighbors_curr[j][2] - pos_neighbors_prev[j][2];
 
       // get the relative positions
-      pos_neighbors_rel[j][0] = pos_neighbors_curr[j][0] - state_array[0];
-      pos_neighbors_rel[j][1] = pos_neighbors_curr[j][1] - state_array[1];
-      pos_neighbors_rel[j][2] = pos_neighbors_curr[j][2] - state_array[2];
+      pos_neighbors_rel[j][0] = pos_neighbors_curr[j][0] - state->position.x;
+      pos_neighbors_rel[j][1] = pos_neighbors_curr[j][1] - state->position.y;
+      pos_neighbors_rel[j][2] = pos_neighbors_curr[j][2] - state->position.z;
 
       if (dt != 0) {
         // update the velocity estimate
-        float vx = (deltaPoses[j][0] / dt) - state_array[3];
-        float vy = (deltaPoses[j][1] / dt) - state_array[4];
-        float vz = (deltaPoses[j][2] / dt) - state_array[5];
+        float vx = (deltaPoses[j][0] / dt) - state->velocity.x;
+        float vy = (deltaPoses[j][1] / dt) - state->velocity.y;
+        float vz = (deltaPoses[j][2] / dt) - state->velocity.z;
 
         vel_neighbors_rel[j][0] = exponentialFilter(vx, vel_neighbors_prev[j][0], weight);
         vel_neighbors_rel[j][1] = exponentialFilter(vy, vel_neighbors_prev[j][1], weight);
@@ -271,15 +296,26 @@ void controllerNN(control_t *control,
     }
 	}
 
-	neighborEmbeddings(neighbors_state_array);
-  //}
+    if(NEIGHBOR_AVOIDANCE){
+        neighborEmbeddings(neighbors_state_array);
+    }
+
+  if(OBSTACLE_AVOIDANCE){
+      // get relative obstacle observations and feed it to the obstacle encoder
+      for(int i = 0; i < K_OBSTACLES; i++) {
+        obstacle_state_array[i][0] = obstacle_obs[i][0] - state->position.x;
+        obstacle_state_array[i][1] = obstacle_obs[i][1] - state->position.y;
+        obstacle_state_array[i][2] = obstacle_obs[i][2] - state->position.z;
+        obstacle_state_array[i][3] = obstacle_obs[i][3];
+      }
+      obstacleEmbeddings(obstacle_state_array);
+  }
+
 
 
 
   // run the neural neural network
-	uint64_t start = usecTimestamp();
 	networkEvaluate(&control_n, state_array);
-	usec_eval = (uint32_t) (usecTimestamp() - start);
 
 	// convert thrusts to directly to PWM
 	// need to hack the firmware (stablizer.c and power_distribution_stock.c)
@@ -368,15 +404,21 @@ PARAM_ADD(PARAM_UINT16, freq, &freq)
 PARAM_GROUP_STOP(ctrlNN)
 
 LOG_GROUP_START(ctrlNN)
-LOG_ADD(LOG_FLOAT, out0, &control_n.thrust_0)
-LOG_ADD(LOG_FLOAT, out1, &control_n.thrust_1)
-LOG_ADD(LOG_FLOAT, out2, &control_n.thrust_2)
-LOG_ADD(LOG_FLOAT, out3, &control_n.thrust_3)
+//LOG_ADD(LOG_FLOAT, out0, &control_n.thrust_0)
+//LOG_ADD(LOG_FLOAT, out1, &control_n.thrust_1)
+//LOG_ADD(LOG_FLOAT, out2, &control_n.thrust_2)
+//LOG_ADD(LOG_FLOAT, out3, &control_n.thrust_3)
+//
+LOG_ADD(LOG_FLOAT, posX, &state_array[0])
+LOG_ADD(LOG_FLOAT, posY, &state_array[1])
+LOG_ADD(LOG_FLOAT, posZ, &state_array[2])
+//LOG_ADD(LOG_FLOAT, obst_rawx, &obstacle_obs[0][0])
+//LOG_ADD(LOG_FLOAT, obst_rawy, &obstacle_obs[0][1])
 
-LOG_ADD(LOG_FLOAT, posX, &pos_raw[0])
-LOG_ADD(LOG_FLOAT, posY, &pos_raw[1])
-LOG_ADD(LOG_FLOAT, posZ, &pos_raw[2])
-LOG_ADD(LOG_FLOAT, fposZ, &state_array[2])
+//LOG_ADD(LOG_FLOAT, obstX, &obstacle_state_array[0][0])
+//LOG_ADD(LOG_FLOAT, obstY, &obstacle_state_array[0][1])
+//LOG_ADD(LOG_FLOAT, obstZ, &obstacle_state_array[0][2])
+//LOG_ADD(LOG_FLOAT, floor_dist, &state_array[18])
 //
 //LOG_ADD(LOG_FLOAT, in3, &state_array[3])
 //LOG_ADD(LOG_FLOAT, in4, &state_array[4])
@@ -386,13 +428,16 @@ LOG_ADD(LOG_FLOAT, fposZ, &state_array[2])
 //LOG_ADD(LOG_FLOAT, in16, &state_array[16])
 //LOG_ADD(LOG_FLOAT, in17, &state_array[17])
 // rel pos of whatever the first neighbor drone is
-LOG_ADD(LOG_FLOAT, nPos0, &neighbors_state_array[0][0])
-LOG_ADD(LOG_FLOAT, nPos1, &neighbors_state_array[0][1])
-LOG_ADD(LOG_FLOAT, nPos2, &neighbors_state_array[0][2])
-LOG_ADD(LOG_FLOAT, nVel0, &neighbors_state_array[0][3])
-LOG_ADD(LOG_FLOAT, nVel1, &neighbors_state_array[0][4])
-LOG_ADD(LOG_FLOAT, nVel2, &neighbors_state_array[0][5])
-
-LOG_ADD(LOG_UINT32, usec_eval, &usec_eval)
+//LOG_ADD(LOG_FLOAT, nPos0, &neighbors_state_array[0][0])
+//LOG_ADD(LOG_FLOAT, nPos1, &neighbors_state_array[0][1])
+//LOG_ADD(LOG_FLOAT, nPos2, &neighbors_state_array[0][2])
+//LOG_ADD(LOG_FLOAT, nVel0, &neighbors_state_array[0][3])
+//LOG_ADD(LOG_FLOAT, nVel1, &neighbors_state_array[0][4])
+//LOG_ADD(LOG_FLOAT, nVel2, &neighbors_state_array[0][5])
+//LOG_ADD(LOG_UINT16, motor1, &motor1)
+//LOG_ADD(LOG_UINT16, pwm0, &pwm0)
+//
+//LOG_ADD(LOG_UINT32, usec_eval, &usec_eval)
+//LOG_ADD(LOG_UINT8, isStale, &isStale)
 
 LOG_GROUP_STOP(ctrlNN)

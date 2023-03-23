@@ -27,6 +27,8 @@ static float r_roll;
 static float r_pitch;
 static float r_yaw;
 static float accelz;
+static float pos_x;
+static float pos_y;
 
 void controllerPidInit(void)
 {
@@ -62,6 +64,8 @@ void controllerPid(control_t *control, setpoint_t *setpoint,
                                          const state_t *state,
                                          const uint32_t tick)
 {
+  pos_x = state->position.x;
+  pos_y = state->position.y;
   if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
     // Rate-controled YAW is moving YAW angle setpoint
     if (setpoint->mode.yaw == modeVelocity) {
@@ -154,6 +158,8 @@ void controllerPid(control_t *control, setpoint_t *setpoint,
 
 
 LOG_GROUP_START(controller)
+LOG_ADD(LOG_FLOAT, posX, &pos_x)
+LOG_ADD(LOG_FLOAT, posY, &pos_y)
 LOG_ADD(LOG_FLOAT, cmd_thrust, &cmd_thrust)
 LOG_ADD(LOG_FLOAT, cmd_roll, &cmd_roll)
 LOG_ADD(LOG_FLOAT, cmd_pitch, &cmd_pitch)

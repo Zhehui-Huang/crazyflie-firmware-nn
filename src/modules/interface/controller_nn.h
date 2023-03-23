@@ -5,6 +5,9 @@
 #include "stabilizer_types.h"
 #include "network_evaluate.h"
 
+#define OBSTACLE_AVOIDANCE 0
+#define NEIGHBOR_AVOIDANCE 0
+
 void controllerNNInit(void);
 bool controllerNNTest(void);
 void controllerNN(control_t *control, setpoint_t *setpoint,

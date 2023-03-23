@@ -95,6 +95,7 @@ static uint32_t ekf_start;
 static uint32_t ekf_end;
 static uint32_t ctrl_start;
 static uint32_t ctrl_end;
+static float log_posx, log_posy, log_posz;
 
 static struct {
   // position - mm
@@ -634,6 +635,12 @@ LOG_ADD(LOG_FLOAT, x, &sensorData.acc.x)
 LOG_ADD(LOG_FLOAT, y, &sensorData.acc.y)
 LOG_ADD(LOG_FLOAT, z, &sensorData.acc.z)
 LOG_GROUP_STOP(acc)
+
+LOG_GROUP_START(stab_state)
+LOG_ADD(LOG_FLOAT, posX, &log_posx)
+LOG_ADD(LOG_FLOAT, posY, &log_posy)
+LOG_ADD(LOG_FLOAT, posZ, &log_posz)
+LOG_GROUP_STOP(stab_state)
 
 #ifdef LOG_SEC_IMU
 LOG_GROUP_START(accSec)
