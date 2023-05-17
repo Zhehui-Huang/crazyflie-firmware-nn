@@ -7,9 +7,9 @@
 
 #define NEIGHBORS 0
 #define NBR_OBS_DIM 6
-#define OBST_OBS_DIM 4  // ignore this if you are using a multi-agent policy without obstacle encoder or just a single agent policy
-#define K_OBSTACLES 2  // ignore this if you are using a multi-agent policy without obstacle encoder or just a single agent policy
-#define NUM_IDS 100 // Number of unique cfids
+#define OBST_OBS_DIM 9  // ignore this if you are using a multi-agent policy without obstacle encoder or just a single agent policy
+#define OBST_NUM 2  // ignore this if you are using a multi-agent policy without obstacle encoder or just a single agent policy
+#define NUM_IDS 10 // Number of unique cfids
 
 /*
  * since the network outputs thrust on each motor,
@@ -23,7 +23,7 @@ typedef struct control_t_n {
 } control_t_n;
 
 void networkEvaluate(control_t_n *control_n, const float *state_array);
-void neighborEmbeddings(const float neighbor_array[NEIGHBORS][NBR_OBS_DIM]);
-void obstacleEmbeddings(const float obstacles_array[K_OBSTACLES][OBST_OBS_DIM]);
+void neighborEmbedder(const float neighbor_array[NEIGHBORS * NBR_OBS_DIM]);
+void obstacleEmbedder(const float obstacles_array[OBST_OBS_DIM]);
 
 #endif

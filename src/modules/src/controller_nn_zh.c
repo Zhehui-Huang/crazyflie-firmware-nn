@@ -44,25 +44,25 @@ static const float min_wall_dist = 0.0;
 static const float max_wall_dist = 3.0;
 
 // Neighbor
-//static const int NEIGHBOR_NUM = 6;
+static const int NEIGHBOR_NUM = 6;
 
 // Obstacle (inf height)
-//static const float obst_pos[OBST_NUM][2] = {
-//        {0.0, 0.0}, // x y z
-//        {-2.0, -2.0},
-//};
+static const float obst_pos[OBST_NUM][2] = {
+        {0.0, 0.0}, // x y z
+        {-2.0, -2.0},
+};
 
-//static const float obst_sdfs[9][2] = {
-//        {-0.1, -0.1},
-//        {-0.1, 0.0},
-//        {-0.1, 0.1},
-//        {0.0, -0.1},
-//        {0.0, 0.0},
-//        {0.0, 0.1},
-//        {0.1, -0.1},
-//        {0.1, 0.0},
-//        {0.1, 0.1},
-//};
+static const float obst_sdfs[9][2] = {
+        {-0.1, -0.1},
+        {-0.1, 0.0},
+        {-0.1, 0.1},
+        {0.0, -0.1},
+        {0.0, 0.0},
+        {0.0, 0.1},
+        {0.1, -0.1},
+        {0.1, 0.0},
+        {0.1, 0.1},
+};
 
 
 // Control
@@ -118,7 +118,7 @@ void controllerNN(control_t *control,
 {
     // This file is specifically for 8 drones, 6 neighbors
 	control->enableDirectThrust = true;
-	float state_array[18];
+	float state_array[19];
     struct mat33 rot;
 
 	// Orientation
@@ -182,7 +182,7 @@ void controllerNN(control_t *control,
 		state_array[17] = omega_yaw;
 	}
     // distance to floor
-//    state_array[18] = clip(state->position.z, min_wall_dist, max_wall_dist); // distance to floor
+    state_array[18] = clip(state->position.z, min_wall_dist, max_wall_dist); // distance to floor
 
 
 	// Get neighbor pos/vel data and update at 10hz
@@ -190,150 +190,150 @@ void controllerNN(control_t *control,
     bool doAgeFilter = maxPeerLocAgeMillis >= 0;
 
     // For neighbors
-//    int cur_agent_num = 0;
-//    float rel_dist_neighbors[6][2] = {0};
+    int cur_agent_num = 0;
+    float rel_dist_neighbors[6][2] = {0};
 
-//    for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
-//        peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
-//        if (otherPos == NULL || otherPos->id == 0) {
-//          continue;
-//        }
-//        if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
-//          isStale = 1;
-//          continue;
-//        } else {
-//          isStale = 0;
-//        }
-//
-//        if ((otherPos->pos.timestamp - pos_neighbors_prev[j][3]) / 1000.0 == 0){
-//            // dt in seconds; this is used for future calculate rel velocity
-//            continue;
-//        }
-//
-//        pos_neighbors_curr[(int)otherPos->id][0] = otherPos->pos.x;
-//        pos_neighbors_curr[(int)otherPos->id][1] = otherPos->pos.y;
-//        pos_neighbors_curr[(int)otherPos->id][2] = otherPos->pos.z;
-//        pos_neighbors_curr[(int)otherPos->id][3] = otherPos->pos.timestamp;
-//
-//        float tmp_dist_x = otherPos->pos.x - state->position.x;
-//        float tmp_dist_y = otherPos->pos.y - state->position.y;
-//        float tmp_dist_z = otherPos->pos.z - state->position.z;
-//
-//        rel_dist_neighbors[cur_agent_num][0] = otherPos->id;
-//        rel_dist_neighbors[cur_agent_num][1] = sqrtf(powf(tmp_dist_x, 2) + powf(tmp_dist_y, 2) + powf(tmp_dist_z, 2));
-//        cur_agent_num++;
-//    }
+    for (int i = 0; i < PEER_LOCALIZATION_MAX_NEIGHBORS; ++i) {
+        peerLocalizationOtherPosition_t const *otherPos = peerLocalizationGetPositionByIdx(i);
+        if (otherPos == NULL || otherPos->id == 0) {
+          continue;
+        }
+        if (doAgeFilter && (time - otherPos->pos.timestamp > maxPeerLocAgeMillis)) {
+          isStale = 1;
+          continue;
+        } else {
+          isStale = 0;
+        }
+
+        if ((otherPos->pos.timestamp - pos_neighbors_prev[j][3]) / 1000.0 == 0){
+            // dt in seconds; this is used for future calculate rel velocity
+            continue;
+        }
+
+        pos_neighbors_curr[(int)otherPos->id][0] = otherPos->pos.x;
+        pos_neighbors_curr[(int)otherPos->id][1] = otherPos->pos.y;
+        pos_neighbors_curr[(int)otherPos->id][2] = otherPos->pos.z;
+        pos_neighbors_curr[(int)otherPos->id][3] = otherPos->pos.timestamp;
+
+        float tmp_dist_x = otherPos->pos.x - state->position.x;
+        float tmp_dist_y = otherPos->pos.y - state->position.y;
+        float tmp_dist_z = otherPos->pos.z - state->position.z;
+
+        rel_dist_neighbors[cur_agent_num][0] = otherPos->id;
+        rel_dist_neighbors[cur_agent_num][1] = sqrtf(powf(tmp_dist_x, 2) + powf(tmp_dist_y, 2) + powf(tmp_dist_z, 2));
+        cur_agent_num++;
+    }
 
     // TODO: If cur_agent_num <= 5, then, skip following operation, return command same as the previous control command
     // That means I need to save previous control command
-//    if (cur_agent_num <= 5) {
-//        control->motorRatios[0] = pre_control_command[0];
-//        control->motorRatios[1] = pre_control_command[1];
-//        control->motorRatios[2] = pre_control_command[2];
-//        control->motorRatios[3] = pre_control_command[3];
-//        return;
-//    }
+    if (cur_agent_num <= 5) {
+        control->motorRatios[0] = pre_control_command[0];
+        control->motorRatios[1] = pre_control_command[1];
+        control->motorRatios[2] = pre_control_command[2];
+        control->motorRatios[3] = pre_control_command[3];
+        return;
+    }
 
-//    float swap_rel_dist[2] = {0};
-//    for (int di = 0; di < cur_agent_num - 1; di++){
-//        for (int dj = 0; dj < cur_agent_num - di - 1; dj++) {
-//            if (rel_dist_neighbors[dj][1] > rel_dist_neighbors[dj + 1][1]){
-//                swap_rel_dist[0] = rel_dist_neighbors[dj][0];
-//                swap_rel_dist[1] = rel_dist_neighbors[dj][1];
-//
-//                rel_dist_neighbors[dj][0] = rel_dist_neighbors[dj + 1][0];
-//                rel_dist_neighbors[dj][1] = rel_dist_neighbors[dj + 1][1];
-//
-//                rel_dist_neighbors[dj + 1][0] = swap_rel_dist[0];
-//                rel_dist_neighbors[dj + 1][1] = swap_rel_dist[1];
-//            }
-//        }
-//    }
+    float swap_rel_dist[2] = {0};
+    for (int di = 0; di < cur_agent_num - 1; di++){
+        for (int dj = 0; dj < cur_agent_num - di - 1; dj++) {
+            if (rel_dist_neighbors[dj][1] > rel_dist_neighbors[dj + 1][1]){
+                swap_rel_dist[0] = rel_dist_neighbors[dj][0];
+                swap_rel_dist[1] = rel_dist_neighbors[dj][1];
 
-//	float neighbors_state_array[NEIGHBORS * NBR_OBS_DIM] = {0};
-//	if (true) {
-//        for (int k = 0; k < NEIGHBOR_NUM; k++) {
-//            int j = (int)rel_dist_neighbors[k][0];
-//
-//            float dt = (pos_neighbors_curr[j][3] - pos_neighbors_prev[j][3]) / 1000.0; // dt in seconds
-//
-//            deltaPoses[j][0] = pos_neighbors_curr[j][0] - pos_neighbors_prev[j][0];
-//            deltaPoses[j][1] = pos_neighbors_curr[j][1] - pos_neighbors_prev[j][1];
-//            deltaPoses[j][2] = pos_neighbors_curr[j][2] - pos_neighbors_prev[j][2];
-//
-//            // get the relative positions
-//            pos_neighbors_rel[j][0] = pos_neighbors_curr[j][0] - state->position.x;
-//            pos_neighbors_rel[j][1] = pos_neighbors_curr[j][1] - state->position.y;
-//            pos_neighbors_rel[j][2] = pos_neighbors_curr[j][2] - state->position.z;
-//
-//            // update the velocity estimate
-//            float vx = (deltaPoses[j][0] / dt) - state->velocity.x;
-//            float vy = (deltaPoses[j][1] / dt) - state->velocity.y;
-//            float vz = (deltaPoses[j][2] / dt) - state->velocity.z;
-//
-//            vel_neighbors_rel[j][0] = exponentialFilter(vx, vel_neighbors_prev[j][0], weight);
-//            vel_neighbors_rel[j][1] = exponentialFilter(vy, vel_neighbors_prev[j][1], weight);
-//            vel_neighbors_rel[j][2] = exponentialFilter(vz, vel_neighbors_prev[j][2], weight);
-//
-//            if (relXYZ) {
-//                // rotate neighbor pos and vel. Untested
-//                struct vec rot_neighbor_pos = mvmul(mtranspose(rot), mkvec(pos_neighbors_rel[j][0], pos_neighbors_rel[j][1], pos_neighbors_rel[j][2]));
-//                struct vec rot_neighbor_vel = mvmul(mtranspose(rot), mkvec(vel_neighbors_rel[j][0], vel_neighbors_rel[j][1], vel_neighbors_rel[j][2]));
-//                pos_neighbors_rel[j][0] = rot_neighbor_pos.x;
-//                pos_neighbors_rel[j][1] = rot_neighbor_pos.y;
-//                pos_neighbors_rel[j][2] = rot_neighbor_pos.z;
-//
-//                vel_neighbors_rel[j][0] = rot_neighbor_vel.x;
-//                vel_neighbors_rel[j][1] = rot_neighbor_vel.y;
-//                vel_neighbors_rel[j][2] = rot_neighbor_vel.z;
-//            }
-//
-//            pos_neighbors_prev[j][0] = pos_neighbors_curr[j][0];
-//            pos_neighbors_prev[j][1] = pos_neighbors_curr[j][1];
-//            pos_neighbors_prev[j][2] = pos_neighbors_curr[j][2];
-//            pos_neighbors_prev[j][3] = pos_neighbors_curr[j][3];
-//
-//            vel_neighbors_prev[j][0] = vel_neighbors_rel[j][0];
-//            vel_neighbors_prev[j][1] = vel_neighbors_rel[j][1];
-//            vel_neighbors_prev[j][2] = vel_neighbors_rel[j][2];
-//
-//            // update the neighbor obs
-//            neighbors_state_array[k * NBR_OBS_DIM + 0] = pos_neighbors_rel[j][0];
-//            neighbors_state_array[k * NBR_OBS_DIM + 1] = pos_neighbors_rel[j][1];
-//            neighbors_state_array[k * NBR_OBS_DIM + 2] = pos_neighbors_rel[j][2];
-//            neighbors_state_array[k * NBR_OBS_DIM + 3] = vel_neighbors_rel[j][0];
-//            neighbors_state_array[k * NBR_OBS_DIM + 4] = vel_neighbors_rel[j][1];
-//            neighbors_state_array[k * NBR_OBS_DIM + 5] = vel_neighbors_rel[j][2];
-//        }
-//    }
+                rel_dist_neighbors[dj][0] = rel_dist_neighbors[dj + 1][0];
+                rel_dist_neighbors[dj][1] = rel_dist_neighbors[dj + 1][1];
 
-//    if(NEIGHBOR_AVOIDANCE){
-//        neighborEmbedder(neighbors_state_array);
-//    }
+                rel_dist_neighbors[dj + 1][0] = swap_rel_dist[0];
+                rel_dist_neighbors[dj + 1][1] = swap_rel_dist[1];
+            }
+        }
+    }
 
-//    if(OBSTACLE_AVOIDANCE){
-//    	float base_pos_x = (float) state->position.x;
-//    	float base_pos_y = (float) state->position.y;
-//        float obstacle_state_array[OBST_OBS_DIM];
-//
-//        // get relative obstacle observations and feed it to the obstacle encoder
-//        for(int sdf_id = 0; sdf_id < 9; sdf_id++){
-//            float cur_pos_x = base_pos_x + obst_sdfs[sdf_id][0];
-//            float cur_pos_y = base_pos_y + obst_sdfs[sdf_id][1];
-//            float min_dist = 100.0;
-//            float tmp_dist = 0.0;
-//            for(int obst_id = 0; obst_id < OBST_NUM; obst_id++) {
-//                tmp_dist = sqrtf(powf(cur_pos_x - obst_pos[obst_id][0], 2) + powf(cur_pos_y - obst_pos[obst_id][1], 2));
-//                if(tmp_dist < min_dist){
-//                    min_dist = tmp_dist;
-//                }
-//            }
-//            obstacle_state_array[sdf_id] = min_dist;
-//        }
-//    }
-//    obstacleEmbedder(obstacle_state_array);
+	float neighbors_state_array[NEIGHBORS * NBR_OBS_DIM] = {0};
+	if (true) {
+        for (int k = 0; k < NEIGHBOR_NUM; k++) {
+            int j = (int)rel_dist_neighbors[k][0];
 
-//    singleHeadAttention();
+            float dt = (pos_neighbors_curr[j][3] - pos_neighbors_prev[j][3]) / 1000.0; // dt in seconds
+
+            deltaPoses[j][0] = pos_neighbors_curr[j][0] - pos_neighbors_prev[j][0];
+            deltaPoses[j][1] = pos_neighbors_curr[j][1] - pos_neighbors_prev[j][1];
+            deltaPoses[j][2] = pos_neighbors_curr[j][2] - pos_neighbors_prev[j][2];
+
+            // get the relative positions
+            pos_neighbors_rel[j][0] = pos_neighbors_curr[j][0] - state->position.x;
+            pos_neighbors_rel[j][1] = pos_neighbors_curr[j][1] - state->position.y;
+            pos_neighbors_rel[j][2] = pos_neighbors_curr[j][2] - state->position.z;
+
+            // update the velocity estimate
+            float vx = (deltaPoses[j][0] / dt) - state->velocity.x;
+            float vy = (deltaPoses[j][1] / dt) - state->velocity.y;
+            float vz = (deltaPoses[j][2] / dt) - state->velocity.z;
+
+            vel_neighbors_rel[j][0] = exponentialFilter(vx, vel_neighbors_prev[j][0], weight);
+            vel_neighbors_rel[j][1] = exponentialFilter(vy, vel_neighbors_prev[j][1], weight);
+            vel_neighbors_rel[j][2] = exponentialFilter(vz, vel_neighbors_prev[j][2], weight);
+
+            if (relXYZ) {
+                // rotate neighbor pos and vel. Untested
+                struct vec rot_neighbor_pos = mvmul(mtranspose(rot), mkvec(pos_neighbors_rel[j][0], pos_neighbors_rel[j][1], pos_neighbors_rel[j][2]));
+                struct vec rot_neighbor_vel = mvmul(mtranspose(rot), mkvec(vel_neighbors_rel[j][0], vel_neighbors_rel[j][1], vel_neighbors_rel[j][2]));
+                pos_neighbors_rel[j][0] = rot_neighbor_pos.x;
+                pos_neighbors_rel[j][1] = rot_neighbor_pos.y;
+                pos_neighbors_rel[j][2] = rot_neighbor_pos.z;
+
+                vel_neighbors_rel[j][0] = rot_neighbor_vel.x;
+                vel_neighbors_rel[j][1] = rot_neighbor_vel.y;
+                vel_neighbors_rel[j][2] = rot_neighbor_vel.z;
+            }
+
+            pos_neighbors_prev[j][0] = pos_neighbors_curr[j][0];
+            pos_neighbors_prev[j][1] = pos_neighbors_curr[j][1];
+            pos_neighbors_prev[j][2] = pos_neighbors_curr[j][2];
+            pos_neighbors_prev[j][3] = pos_neighbors_curr[j][3];
+
+            vel_neighbors_prev[j][0] = vel_neighbors_rel[j][0];
+            vel_neighbors_prev[j][1] = vel_neighbors_rel[j][1];
+            vel_neighbors_prev[j][2] = vel_neighbors_rel[j][2];
+
+            // update the neighbor obs
+            neighbors_state_array[k * NBR_OBS_DIM + 0] = pos_neighbors_rel[j][0];
+            neighbors_state_array[k * NBR_OBS_DIM + 1] = pos_neighbors_rel[j][1];
+            neighbors_state_array[k * NBR_OBS_DIM + 2] = pos_neighbors_rel[j][2];
+            neighbors_state_array[k * NBR_OBS_DIM + 3] = vel_neighbors_rel[j][0];
+            neighbors_state_array[k * NBR_OBS_DIM + 4] = vel_neighbors_rel[j][1];
+            neighbors_state_array[k * NBR_OBS_DIM + 5] = vel_neighbors_rel[j][2];
+        }
+    }
+
+    if(NEIGHBOR_AVOIDANCE){
+        neighborEmbedder(neighbors_state_array);
+    }
+
+    if(OBSTACLE_AVOIDANCE){
+    	float base_pos_x = (float) state->position.x;
+    	float base_pos_y = (float) state->position.y;
+        float obstacle_state_array[OBST_OBS_DIM];
+
+        // get relative obstacle observations and feed it to the obstacle encoder
+        for(int sdf_id = 0; sdf_id < 9; sdf_id++){
+            float cur_pos_x = base_pos_x + obst_sdfs[sdf_id][0];
+            float cur_pos_y = base_pos_y + obst_sdfs[sdf_id][1];
+            float min_dist = 100.0;
+            float tmp_dist = 0.0;
+            for(int obst_id = 0; obst_id < OBST_NUM; obst_id++) {
+                tmp_dist = sqrtf(powf(cur_pos_x - obst_pos[obst_id][0], 2) + powf(cur_pos_y - obst_pos[obst_id][1], 2));
+                if(tmp_dist < min_dist){
+                    min_dist = tmp_dist;
+                }
+            }
+            obstacle_state_array[sdf_id] = min_dist;
+        }
+    }
+    obstacleEmbedder(obstacle_state_array);
+
+    singleHeadAttention();
 
     // run the neural neural network
     networkEvaluate(&control_n, state_array);
